@@ -1,97 +1,77 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import { KpiCard } from '../components/kpi-card';
 import { SectionCard } from '../components/section-card';
 import { Topbar } from '../components/topbar';
+import { api } from '../lib/api';
 
-const kpis = [
-  { label: 'Socios Totales', value: '1.248', hint: '43 altas netas en el trimestre' },
-  { label: 'Activos', value: '1.006', hint: '80,6% del padron total' },
-  { label: 'Morosos', value: '182', hint: '14,5% con deuda pendiente' },
-  { label: 'Recaudacion', value: '$18,4M', hint: 'Acumulado del mes en curso' },
-];
+type DashboardData = {
+  cards: {
+    totalMembers: number;
+    activeMembers: number;
+    delinquentMembers: number;
+    collectedAmount: number;
+  };
+  alerts: { code: string; label: string; value: number }[];
+};
 
-const debtRows = [
-  ['Juan Perez', '3 periodos', '$45.000', 'Recordar hoy'],
-  ['Ana Gomez', '2 periodos', '$28.000', 'Llamar'],
-  ['Lucia Sosa', '5 periodos', '$71.000', 'Gestion especial'],
-];
+function fmt(n: number) {
+  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n);
+}
 
 export default function HomePage() {
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.get<DashboardData>('/dashboard')
+      .then(setData)
+      .finally(() => setLoading(false));
+  }, []);
+
+  const kpis = data
+    ? [
+        { label: 'Socios Totales', value: String(data.cards.totalMembers), hint: 'Total de socios registrados' },
+        { label: 'Activos', value: String(data.cards.activeMembers), hint: `${Math.round((data.cards.activeMembers / data.cards.totalMembers) * 100)}% del padrón total` },
+        { label: 'Morosos', value: String(data.cards.delinquentMembers), hint: 'Con deuda pendiente' },
+        { label: 'Recaudación', value: fmt(data.cards.collectedAmount), hint: 'Total acumulado' },
+      ]
+    : [
+        { label: 'Socios Totales', value: '...', hint: '' },
+        { label: 'Activos', value: '...', hint: '' },
+        { label: 'Morosos', value: '...', hint: '' },
+        { label: 'Recaudación', value: '...', hint: '' },
+      ];
+
   return (
     <div className="space-y-8">
       <Topbar />
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {kpis.map((item) => (
+        {kpis.map(item => (
           <KpiCard key={item.label} {...item} />
         ))}
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-[1.3fr_0.9fr]">
-        <SectionCard
-          title="Vista de cobranzas"
-          description="Serie temporal esperada para presidencia y tesoreria. La implementacion final consumira la API del dashboard."
-        >
-          <div className="rounded-3xl border border-dashed border-ink/15 bg-canvas p-6">
-            <div className="flex h-64 items-end gap-3">
-              {[45, 58, 63, 51, 72, 81, 76, 90, 86, 94, 88, 98].map((value, index) => (
-                <div key={index} className="flex-1 rounded-t-2xl bg-accent/85" style={{ height: `${value}%` }} />
-              ))}
-            </div>
-            <div className="mt-4 flex justify-between text-xs uppercase tracking-[0.16em] text-ink/45">
-              <span>Ene</span>
-              <span>Jun</span>
-              <span>Dic</span>
-            </div>
-          </div>
-        </SectionCard>
-
-        <SectionCard
-          title="Alertas operativas"
-          description="Acciones inmediatas derivadas del estado financiero y documental."
-        >
+      <SectionCard title="Alertas operativas" description="Estado actual del sistema.">
+        {loading ? (
+          <p className="text-sm text-ink/50">Cargando...</p>
+        ) : (
           <div className="space-y-3">
-            <div className="rounded-2xl bg-warn/10 p-4 text-sm">
-              37 movimientos de egreso sin comprobante adjunto.
-            </div>
-            <div className="rounded-2xl bg-accent/10 p-4 text-sm">
-              182 socios con deuda; 61 superan 3 periodos.
-            </div>
-            <div className="rounded-2xl bg-ink/5 p-4 text-sm">
-              1 campana de WhatsApp pendiente de aprobacion.
-            </div>
+            {data?.alerts.map(alert => (
+              <div key={alert.code} className="rounded-2xl bg-accent/10 p-4 text-sm">
+                {alert.value} {alert.label}
+              </div>
+            ))}
+            {(!data?.alerts || data.alerts.length === 0) && (
+              <div className="rounded-2xl bg-ink/5 p-4 text-sm text-ink/60">
+                Sin alertas activas.
+              </div>
+            )}
           </div>
-        </SectionCard>
-      </section>
-
-      <SectionCard
-        title="Morosidad priorizada"
-        description="Listado accionable para recupero, con foco en antiguedad y monto."
-      >
-        <div className="overflow-hidden rounded-2xl border border-ink/10">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-ink/5 text-ink/60">
-              <tr>
-                <th className="px-4 py-3">Socio</th>
-                <th className="px-4 py-3">Antiguedad</th>
-                <th className="px-4 py-3">Deuda</th>
-                <th className="px-4 py-3">Accion sugerida</th>
-              </tr>
-            </thead>
-            <tbody>
-              {debtRows.map((row) => (
-                <tr key={row[0]} className="border-t border-ink/10 bg-white">
-                  {row.map((cell) => (
-                    <td key={cell} className="px-4 py-3">
-                      {cell}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        )}
       </SectionCard>
     </div>
   );
 }
-
