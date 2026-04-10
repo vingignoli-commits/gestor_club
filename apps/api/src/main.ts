@@ -1,8 +1,12 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { execSync } from 'child_process';
 
 async function bootstrap() {
+  // Correr migraciones automáticamente al iniciar
+  execSync('npx prisma migrate deploy', { stdio: 'inherit' });
+
   const app = await NestFactory.create(AppModule);
 
   app.setGlobalPrefix('api/v1');
@@ -19,4 +23,3 @@ async function bootstrap() {
 }
 
 bootstrap();
-
