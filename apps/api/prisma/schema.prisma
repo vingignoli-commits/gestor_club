@@ -1,0 +1,379 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MemberType {
+  TITULAR
+  ADHERENTE
+  BECADO
+  VITALICIO
+  INVITADO
+}
+
+enum PaymentStatus {
+  REGISTERED
+  VOID
+}
+
+enum AllocationStatus {
+  APPLIED
+  VOID
+}
+
+enum ChargeStatus {
+  PENDING
+  PAID
+  PARTIAL
+  VOID
+}
+
+enum CashDirection {
+  IN
+  OUT
+}
+
+enum TransactionSourceType {
+  MEMBERSHIP_PAYMENT
+  EXTRA_INCOME
+  EXPENSE
+  ADJUSTMENT
+}
+
+enum MessageChannel {
+  WHATSAPP
+}
+
+enum MessageStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  fullName     String
+  passwordHash String
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  userRoles    UserRole[]
+  auditLogs    AuditLog[]
+}
+
+model Role {
+  id              String           @id @default(cuid())
+  code            String           @unique
+  name            String
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+}
+
+model Permission {
+  id              String           @id @default(cuid())
+  code            String           @unique
+  name            String
+  createdAt       DateTime         @default(now())
+  rolePermissions RolePermission[]
+}
+
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  role      Role     @relation(fields: [roleId], references: [id])
+
+  @@unique([userId, roleId])
+}
+
+model RolePermission {
+  id           String     @id @default(cuid())
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@unique([roleId, permissionId])
+}
+
+model MemberCategory {
+  id              String                  @id @default(cuid())
+  code            String                  @unique
+  name            String
+  description     String?
+  isActive        Boolean                 @default(true)
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  members         Member[]
+  categoryHistory MemberCategoryHistory[]
+}
+
+model Member {
+  id                String                  @id @default(cuid())
+  firstName         String
+  lastName          String
+  documentNumber    String                  @unique
+  email             String?
+  phone             String?
+  addressLine       String?
+  joinedAt          DateTime
+  currentStatusCode String
+  memberType        MemberType
+  notes             String?
+  categoryId        String
+  familyGroupId     String?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  category          MemberCategory          @relation(fields: [categoryId], references: [id])
+  statusHistory     MemberStatusHistory[]
+  categoryHistory   MemberCategoryHistory[]
+  planAssignments   MemberPlanAssignment[]
+  discounts         MemberDiscount[]
+  payments          Payment[]
+  charges           Charge[]
+  fileLinks         FileLink[]
+  messageDispatches MessageDispatch[]
+
+  @@index([lastName, firstName])
+  @@index([currentStatusCode, categoryId])
+}
+
+model MemberStatusHistory {
+  id            String    @id @default(cuid())
+  memberId      String
+  statusCode    String
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  reason        String?
+  createdAt     DateTime  @default(now())
+  member        Member    @relation(fields: [memberId], references: [id])
+
+  @@index([memberId, effectiveFrom(sort: Desc)])
+}
+
+model MemberCategoryHistory {
+  id            String         @id @default(cuid())
+  memberId      String
+  categoryId    String
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  reason        String?
+  createdAt     DateTime       @default(now())
+  member        Member         @relation(fields: [memberId], references: [id])
+  category      MemberCategory @relation(fields: [categoryId], references: [id])
+
+  @@index([memberId, effectiveFrom(sort: Desc)])
+}
+
+model MembershipPlan {
+  id             String                @id @default(cuid())
+  code           String                @unique
+  name           String
+  frequency      String
+  isActive       Boolean               @default(true)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  prices         MembershipPlanPrice[]
+  assignments    MemberPlanAssignment[]
+}
+
+model MembershipPlanPrice {
+  id            String         @id @default(cuid())
+  membershipPlanId String
+  amount        Decimal        @db.Decimal(12, 2)
+  validFrom     DateTime
+  validTo       DateTime?
+  createdAt     DateTime       @default(now())
+  membershipPlan MembershipPlan @relation(fields: [membershipPlanId], references: [id])
+
+  @@index([membershipPlanId, validFrom(sort: Desc)])
+}
+
+model MemberPlanAssignment {
+  id               String         @id @default(cuid())
+  memberId         String
+  membershipPlanId String
+  effectiveFrom    DateTime
+  effectiveTo      DateTime?
+  reason           String?
+  createdAt        DateTime       @default(now())
+  member           Member         @relation(fields: [memberId], references: [id])
+  membershipPlan   MembershipPlan @relation(fields: [membershipPlanId], references: [id])
+
+  @@index([memberId, effectiveFrom(sort: Desc)])
+}
+
+model MemberDiscount {
+  id            String    @id @default(cuid())
+  memberId      String
+  label         String
+  percentage    Decimal?  @db.Decimal(5, 2)
+  fixedAmount   Decimal?  @db.Decimal(12, 2)
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  createdAt     DateTime  @default(now())
+  member        Member    @relation(fields: [memberId], references: [id])
+}
+
+model BillingPeriod {
+  id             String              @id @default(cuid())
+  code           String              @unique
+  label          String
+  periodYear     Int
+  periodMonth    Int
+  dueDate        DateTime
+  createdAt      DateTime            @default(now())
+  charges        Charge[]
+  allocations    PaymentAllocation[]
+
+  @@unique([periodYear, periodMonth])
+}
+
+model Charge {
+  id              String       @id @default(cuid())
+  memberId        String
+  billingPeriodId String
+  amount          Decimal      @db.Decimal(12, 2)
+  dueDate         DateTime
+  status          ChargeStatus @default(PENDING)
+  description     String?
+  createdAt       DateTime     @default(now())
+  member          Member       @relation(fields: [memberId], references: [id])
+  billingPeriod   BillingPeriod @relation(fields: [billingPeriodId], references: [id])
+
+  @@unique([memberId, billingPeriodId])
+  @@index([memberId, status])
+}
+
+model Payment {
+  id          String              @id @default(cuid())
+  memberId    String
+  paidAt      DateTime
+  amount      Decimal             @db.Decimal(12, 2)
+  methodCode  String
+  status      PaymentStatus       @default(REGISTERED)
+  notes       String?
+  createdAt   DateTime            @default(now())
+  member      Member              @relation(fields: [memberId], references: [id])
+  allocations PaymentAllocation[]
+
+  @@index([memberId, paidAt(sort: Desc)])
+}
+
+model PaymentAllocation {
+  id              String           @id @default(cuid())
+  paymentId       String
+  billingPeriodId String
+  amount          Decimal          @db.Decimal(12, 2)
+  status          AllocationStatus @default(APPLIED)
+  createdAt       DateTime         @default(now())
+  payment         Payment          @relation(fields: [paymentId], references: [id])
+  billingPeriod   BillingPeriod    @relation(fields: [billingPeriodId], references: [id])
+
+  @@index([paymentId, billingPeriodId])
+}
+
+model AccountingCategory {
+  id          String            @id @default(cuid())
+  code        String            @unique
+  name        String
+  direction   CashDirection
+  isActive    Boolean           @default(true)
+  createdAt   DateTime          @default(now())
+  transactions CashTransaction[]
+}
+
+model CashTransaction {
+  id                   String             @id @default(cuid())
+  direction            CashDirection
+  sourceType           TransactionSourceType
+  occurredAt           DateTime
+  amount               Decimal            @db.Decimal(12, 2)
+  methodCode           String?
+  description          String
+  accountingCategoryId String?
+  referenceId          String?
+  notes                String?
+  createdAt            DateTime           @default(now())
+  accountingCategory   AccountingCategory? @relation(fields: [accountingCategoryId], references: [id])
+  fileLinks            FileLink[]
+
+  @@index([occurredAt, direction])
+}
+
+model FileAsset {
+  id            String     @id @default(cuid())
+  storageKey    String
+  originalName  String
+  mimeType      String
+  sizeBytes     Int
+  externalUrl   String?
+  uploadedById  String?
+  createdAt     DateTime   @default(now())
+  links         FileLink[]
+}
+
+model FileLink {
+  id                String           @id @default(cuid())
+  fileAssetId       String
+  memberId          String?
+  cashTransactionId String?
+  label             String?
+  createdAt         DateTime         @default(now())
+  fileAsset         FileAsset        @relation(fields: [fileAssetId], references: [id])
+  member            Member?          @relation(fields: [memberId], references: [id])
+  cashTransaction   CashTransaction? @relation(fields: [cashTransactionId], references: [id])
+}
+
+model WhatsappTemplate {
+  id          String            @id @default(cuid())
+  name        String
+  code        String            @unique
+  body        String
+  isActive    Boolean           @default(true)
+  createdAt   DateTime          @default(now())
+  dispatches  MessageDispatch[]
+}
+
+model MessageDispatch {
+  id            String          @id @default(cuid())
+  memberId      String?
+  templateId    String?
+  channel       MessageChannel
+  destination   String
+  renderedBody  String
+  status        MessageStatus   @default(PENDING)
+  scheduledAt   DateTime?
+  sentAt        DateTime?
+  providerRef   String?
+  errorMessage  String?
+  createdAt     DateTime        @default(now())
+  member        Member?         @relation(fields: [memberId], references: [id])
+  template      WhatsappTemplate? @relation(fields: [templateId], references: [id])
+
+  @@index([status, scheduledAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  entityName String
+  entityId   String
+  action     String
+  beforeData Json?
+  afterData  Json?
+  createdAt  DateTime @default(now())
+  user       User?    @relation(fields: [userId], references: [id])
+
+  @@index([entityName, entityId, createdAt(sort: Desc)])
+}
+
