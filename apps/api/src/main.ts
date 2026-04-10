@@ -4,8 +4,8 @@ import { AppModule } from './app.module';
 import { execSync } from 'child_process';
 
 async function bootstrap() {
-  // Correr migraciones automáticamente al iniciar
   execSync('npx prisma migrate deploy', { stdio: 'inherit' });
+  execSync('npx tsx prisma/seed.ts', { stdio: 'inherit' });
 
   const app = await NestFactory.create(AppModule);
 
