@@ -1,55 +1,154 @@
-import { SectionCard } from '../../components/section-card';
+'use client';
 
-const rows = [
-  ['Perez, Juan', '30111222', 'Activo', 'Socio Activo', '$45.000'],
-  ['Gomez, Ana', '28999111', 'Activo', 'Grupo Familiar', '$28.000'],
-  ['Sosa, Lucia', '31222444', 'Suspendido', 'Socio Activo', '$71.000'],
-];
+import { useEffect, useState } from 'react';
+import { SectionCard } from '../../components/section-card';
+import { api } from '../../lib/api';
+
+type Member = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  documentNumber: string;
+  currentStatusCode: string;
+  memberType: string;
+  category: { name: string };
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  ACTIVE: 'Activo',
+  SUSPENDED: 'Suspendido',
+  INACTIVE: 'Inactivo',
+};
 
 export default function MembersPage() {
+  const [members, setMembers] = useState<Member[]>([]);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ firstName: '', lastName: '', documentNumber: '', email: '', phone: '', joinedAt: '', memberType: 'TITULAR', categoryId: '', notes: '' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  function load(q?: string) {
+    setLoading(true);
+    api.get<Member[]>(`/members${q ? `?search=${encodeURIComponent(q)}` : ''}`)
+      .then(setMembers)
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => { load(); }, []);
+
+  function handleSearch(e: React.FormEvent) {
+    e.preventDefault();
+    load(search);
+  }
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    setSaving(true);
+    try {
+      await api.post('/members', form);
+      setShowForm(false);
+      setForm({ firstName: '', lastName: '', documentNumber: '', email: '', phone: '', joinedAt: '', memberType: 'TITULAR', categoryId: '', notes: '' });
+      load();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error al guardar');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
-      <SectionCard
-        title="Padron de socios"
-        description="Busqueda avanzada, filtros persistentes y acceso rapido a ficha, deuda e historial."
-      >
-        <div className="mb-5 grid gap-3 md:grid-cols-4">
-          <input className="rounded-2xl border border-ink/10 px-4 py-3" placeholder="Buscar por nombre o DNI" />
-          <select className="rounded-2xl border border-ink/10 px-4 py-3">
-            <option>Todos los estados</option>
-          </select>
-          <select className="rounded-2xl border border-ink/10 px-4 py-3">
-            <option>Todas las categorias</option>
-          </select>
-          <button className="rounded-2xl bg-accent px-4 py-3 font-semibold text-white">Nuevo socio</button>
-        </div>
+      <SectionCard title="Padrón de socios" description="Búsqueda y listado de todos los socios del club.">
+        <form onSubmit={handleSearch} className="mb-5 flex gap-3">
+          <input
+            className="flex-1 rounded-2xl border border-ink/10 px-4 py-3"
+            placeholder="Buscar por nombre o DNI"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+          <button type="submit" className="rounded-2xl bg-ink/10 px-5 py-3 text-sm font-semibold">
+            Buscar
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowForm(true)}
+            className="rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-white"
+          >
+            + Nuevo socio
+          </button>
+        </form>
 
-        <div className="overflow-hidden rounded-2xl border border-ink/10">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-ink/5 text-ink/60">
-              <tr>
-                <th className="px-4 py-3">Socio</th>
-                <th className="px-4 py-3">Documento</th>
-                <th className="px-4 py-3">Estado</th>
-                <th className="px-4 py-3">Categoria</th>
-                <th className="px-4 py-3">Deuda</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row[1]} className="border-t border-ink/10 bg-white">
-                  {row.map((cell) => (
-                    <td key={cell} className="px-4 py-3">
-                      {cell}
-                    </td>
-                  ))}
+        {loading ? (
+          <p className="py-8 text-center text-sm text-ink/50">Cargando socios...</p>
+        ) : (
+          <div className="overflow-hidden rounded-2xl border border-ink/10">
+            <table className="min-w-full text-left text-sm">
+              <thead className="bg-ink/5 text-ink/60">
+                <tr>
+                  <th className="px-4 py-3">Socio</th>
+                  <th className="px-4 py-3">Documento</th>
+                  <th className="px-4 py-3">Estado</th>
+                  <th className="px-4 py-3">Tipo</th>
+                  <th className="px-4 py-3">Categoría</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {members.length === 0 && (
+                  <tr><td colSpan={5} className="px-4 py-8 text-center text-ink/50">No se encontraron socios.</td></tr>
+                )}
+                {members.map(m => (
+                  <tr key={m.id} className="border-t border-ink/10 bg-white">
+                    <td className="px-4 py-3 font-medium">{m.lastName}, {m.firstName}</td>
+                    <td className="px-4 py-3">{m.documentNumber}</td>
+                    <td className="px-4 py-3">
+                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${m.currentStatusCode === 'ACTIVE' ? 'bg-accent/10 text-accent' : 'bg-warn/10 text-warn'}`}>
+                        {STATUS_LABELS[m.currentStatusCode] ?? m.currentStatusCode}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-ink/60">{m.memberType}</td>
+                    <td className="px-4 py-3 text-ink/60">{m.category?.name}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </SectionCard>
+
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-[2rem] bg-panel p-8 shadow-card">
+            <h2 className="mb-5 font-display text-2xl font-semibold">Nuevo socio</h2>
+            <form onSubmit={handleCreate} className="space-y-3">
+              <div className="grid gap-3 md:grid-cols-2">
+                <input className="rounded-2xl border border-ink/10 px-4 py-3" placeholder="Nombre" value={form.firstName} onChange={e => setForm(f => ({ ...f, firstName: e.target.value }))} required />
+                <input className="rounded-2xl border border-ink/10 px-4 py-3" placeholder="Apellido" value={form.lastName} onChange={e => setForm(f => ({ ...f, lastName: e.target.value }))} required />
+                <input className="rounded-2xl border border-ink/10 px-4 py-3" placeholder="DNI" value={form.documentNumber} onChange={e => setForm(f => ({ ...f, documentNumber: e.target.value }))} required />
+                <input className="rounded-2xl border border-ink/10 px-4 py-3" placeholder="Email" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+                <input className="rounded-2xl border border-ink/10 px-4 py-3" placeholder="Teléfono" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
+                <input className="rounded-2xl border border-ink/10 px-4 py-3" placeholder="Fecha de alta" type="date" value={form.joinedAt} onChange={e => setForm(f => ({ ...f, joinedAt: e.target.value }))} required />
+                <select className="rounded-2xl border border-ink/10 px-4 py-3" value={form.memberType} onChange={e => setForm(f => ({ ...f, memberType: e.target.value }))}>
+                  <option value="TITULAR">Titular</option>
+                  <option value="ADHERENTE">Adherente</option>
+                  <option value="BECADO">Becado</option>
+                  <option value="VITALICIO">Vitalicio</option>
+                  <option value="INVITADO">Invitado</option>
+                </select>
+                <input className="rounded-2xl border border-ink/10 px-4 py-3" placeholder="ID de categoría" value={form.categoryId} onChange={e => setForm(f => ({ ...f, categoryId: e.target.value }))} required />
+              </div>
+              <input className="w-full rounded-2xl border border-ink/10 px-4 py-3" placeholder="Notas (opcional)" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+              {error && <p className="rounded-2xl bg-warn/10 px-4 py-3 text-sm text-warn">{error}</p>}
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setShowForm(false)} className="flex-1 rounded-2xl border border-ink/10 px-4 py-3 text-sm font-semibold">Cancelar</button>
+                <button type="submit" disabled={saving} className="flex-1 rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white disabled:opacity-60">{saving ? 'Guardando...' : 'Guardar'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
