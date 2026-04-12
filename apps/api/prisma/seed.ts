@@ -3,146 +3,90 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
-  const activeCategory = await prisma.memberCategory.upsert({
-    where: { code: 'ACTIVO' },
+  // Tarifas mensuales por categoria
+  const rates = [
+    { category: 'SIMPLE', amount: 5000 },
+    { category: 'DOBLE', amount: 9000 },
+    { category: 'ESTUDIANTE', amount: 3000 },
+    { category: 'SOCIAL', amount: 4000 },
+    { category: 'MENOR', amount: 2500 },
+    { category: 'HONOR', amount: 0 },
+  ];
+
+  for (const rate of rates) {
+    await prisma.monthlyRate.upsert({
+      where: { id: `rate-${rate.category}` },
+      update: { amount: rate.amount },
+      create: {
+        id: `rate-${rate.category}`,
+        category: rate.category as any,
+        amount: rate.amount,
+        validFrom: new Date('2026-01-01'),
+      },
+    });
+  }
+
+  // Periodo actual
+  const period = await prisma.billingPeriod.upsert({
+    where: { code: '2026-04' },
     update: {},
     create: {
-      code: 'ACTIVO',
-      name: 'Socio Activo',
+      code: '2026-04',
+      label: 'Abril 2026',
+      periodYear: 2026,
+      periodMonth: 4,
+      dueDate: new Date('2026-04-10'),
     },
   });
 
-  const familyCategory = await prisma.memberCategory.upsert({
-    where: { code: 'FAMILIAR' },
+  // Socios de prueba
+  const members = [
+    { matricula: '001', firstName: 'Juan', lastName: 'Perez', category: 'SIMPLE', grade: '1ro', phone: '+5493510000001', email: 'juan@example.com' },
+    { matricula: '002', firstName: 'Ana', lastName: 'Gomez', category: 'DOBLE', grade: '2do', phone: '+5493510000002', email: 'ana@example.com' },
+    { matricula: '003', firstName: 'Carlos', lastName: 'Lopez', category: 'ESTUDIANTE', grade: '3ro', phone: '+5493510000003', email: 'carlos@example.com' },
+  ];
+
+  for (const m of members) {
+    await prisma.member.upsert({
+      where: { matricula: m.matricula },
+      update: {},
+      create: {
+        ...m,
+        category: m.category as any,
+        status: 'ACTIVE',
+        joinedAt: new Date('2026-01-01'),
+      },
+    });
+  }
+
+  // Templates WhatsApp
+  await prisma.whatsappTemplate.upsert({
+    where: { code: 'VENCIMIENTO_CUOTA' },
     update: {},
     create: {
-      code: 'FAMILIAR',
-      name: 'Grupo Familiar',
+      code: 'VENCIMIENTO_CUOTA',
+      name: 'Recordatorio vencimiento',
+      body: 'Hola {{nombre}}, te recordamos que tu cuota de {{mes}} vence el {{fecha}}. Monto: ${{monto}}.',
     },
   });
 
   await prisma.whatsappTemplate.upsert({
-    where: { code: 'RECORDATORIO_MORA' },
+    where: { code: 'AVISO_DEUDA' },
     update: {},
     create: {
-      code: 'RECORDATORIO_MORA',
-      name: 'Recordatorio de mora',
-      body: 'Hola {{nombre}} {{apellido}}, te contactamos desde el club por tu estado de cuenta pendiente.',
+      code: 'AVISO_DEUDA',
+      name: 'Aviso de deuda',
+      body: 'Hola {{nombre}}, tenes una deuda pendiente de ${{monto}}. Por favor regulariza tu situacion.',
     },
   });
 
-  await prisma.membershipPlan.upsert({
-    where: { code: 'CUOTA_ACTIVO' },
-    update: {},
-    create: {
-      code: 'CUOTA_ACTIVO',
-      name: 'Cuota socio activo',
-      frequency: 'MONTHLY',
-      prices: {
-        create: {
-          amount: 15000,
-          validFrom: new Date('2026-01-01'),
-        },
-      },
-    },
-  });
-
-  const period = await prisma.billingPeriod.upsert({
-    where: { code: '2026-03' },
-    update: {},
-    create: {
-      code: '2026-03',
-      label: 'Marzo 2026',
-      periodYear: 2026,
-      periodMonth: 3,
-      dueDate: new Date('2026-03-10'),
-    },
-  });
-
-  const member = await prisma.member.upsert({
-    where: { documentNumber: '30111222' },
-    update: {},
-    create: {
-      firstName: 'Juan',
-      lastName: 'Perez',
-      documentNumber: '30111222',
-      email: 'juan.perez@example.com',
-      phone: '+5493510000000',
-      joinedAt: new Date('2026-01-05'),
-      currentStatusCode: 'ACTIVE',
-      memberType: 'TITULAR',
-      categoryId: activeCategory.id,
-      statusHistory: {
-        create: {
-          statusCode: 'ACTIVE',
-          effectiveFrom: new Date('2026-01-05'),
-          reason: 'Alta inicial',
-        },
-      },
-      categoryHistory: {
-        create: {
-          categoryId: activeCategory.id,
-          effectiveFrom: new Date('2026-01-05'),
-          reason: 'Alta inicial',
-        },
-      },
-    },
-  });
-
-  await prisma.member.upsert({
-    where: { documentNumber: '28999111' },
-    update: {},
-    create: {
-      firstName: 'Ana',
-      lastName: 'Gomez',
-      documentNumber: '28999111',
-      email: 'ana.gomez@example.com',
-      phone: '+5493511111111',
-      joinedAt: new Date('2026-02-01'),
-      currentStatusCode: 'ACTIVE',
-      memberType: 'ADHERENTE',
-      categoryId: familyCategory.id,
-      statusHistory: {
-        create: {
-          statusCode: 'ACTIVE',
-          effectiveFrom: new Date('2026-02-01'),
-        },
-      },
-      categoryHistory: {
-        create: {
-          categoryId: familyCategory.id,
-          effectiveFrom: new Date('2026-02-01'),
-        },
-      },
-    },
-  });
-
-  await prisma.charge.upsert({
-    where: {
-      memberId_billingPeriodId: {
-        memberId: member.id,
-        billingPeriodId: period.id,
-      },
-    },
-    update: {},
-    create: {
-      memberId: member.id,
-      billingPeriodId: period.id,
-      amount: 15000,
-      dueDate: new Date('2026-03-10'),
-      status: 'PENDING',
-      description: 'Cuota Marzo 2026',
-    },
-  });
+  console.log('Seed completado');
 }
 
 main()
-  .then(async () => {
-    await prisma.$disconnect();
-  })
-  .catch(async (error) => {
-    console.error(error);
+  .then(() => prisma.$disconnect())
+  .catch(async (e) => {
+    console.error(e);
     await prisma.$disconnect();
     process.exit(1);
   });
-

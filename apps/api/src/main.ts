@@ -4,11 +4,10 @@ import { AppModule } from './app.module';
 import { execSync } from 'child_process';
 
 async function bootstrap() {
-  execSync('npx prisma db push', { stdio: 'inherit' });
+  execSync('npx prisma db push --accept-data-loss', { stdio: 'inherit' });
   execSync('npx tsx prisma/seed.ts', { stdio: 'inherit' });
 
   const app = await NestFactory.create(AppModule);
-
   app.setGlobalPrefix('api/v1');
   app.enableCors();
   app.useGlobalPipes(
