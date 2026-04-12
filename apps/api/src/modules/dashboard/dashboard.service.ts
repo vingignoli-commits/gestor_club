@@ -6,14 +6,11 @@ export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getExecutiveDashboard() {
-    const [totalMembers, activeMembers, delinquentMembers, payments, transactions] =
+    const [totalMembers, activeMembers, charges, payments, transactions] =
       await Promise.all([
         this.prisma.member.count(),
-        this.prisma.member.count({ where: { currentStatusCode: 'ACTIVE' } }),
-        this.prisma.charge.groupBy({
-          by: ['memberId'],
-          where: { status: 'PENDING' },
-        }),
+        this.prisma.member.count({ where: { status: 'ACTIVE' } }),
+        this.prisma.charge.findMany(),
         this.prisma.payment.aggregate({
           _sum: { amount: true },
           where: { status: 'REGISTERED' },
@@ -24,26 +21,36 @@ export class DashboardService {
         }),
       ]);
 
-    const income = transactions.find((item) => item.direction === 'IN')?._sum.amount ?? 0;
-    const expense = transactions.find((item) => item.direction === 'OUT')?._sum.amount ?? 0;
+    const totalCharged = charges.reduce((s, c) => s + Number(c.amount), 0);
+    const totalPaid = charges.reduce((s, c) => s + Number(c.paidAmount), 0);
+    const delinquentMembers = await this.prisma.member.count({
+      where: {
+        charges: {
+          some: {
+            paidAmount: { lt: this.prisma.charge.fields.amount },
+          },
+        },
+      },
+    });
+
+    const income = transactions.find((t) => t.direction === 'IN')?._sum.amount ?? 0;
+    const expense = transactions.find((t) => t.direction === 'OUT')?._sum.amount ?? 0;
 
     return {
       cards: {
         totalMembers,
         activeMembers,
-        delinquentMembers: delinquentMembers.length,
+        delinquentMembers,
         collectedAmount: Number(payments._sum.amount ?? 0),
+        totalDebt: totalCharged - totalPaid,
         income: Number(income),
         expense: Number(expense),
       },
       alerts: [
-        {
-          code: 'DELINQUENCY',
-          label: 'Socios con deuda pendiente',
-          value: delinquentMembers.length,
-        },
+        ...(delinquentMembers > 0
+          ? [{ code: 'DELINQUENCY', label: 'socios con deuda pendiente', value: delinquentMembers }]
+          : []),
       ],
     };
   }
 }
-

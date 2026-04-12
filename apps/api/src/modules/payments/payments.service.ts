@@ -1,106 +1,96 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
-import { AuditService } from '../audit/audit.service';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 
 @Injectable()
 export class PaymentsService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly auditService: AuditService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   findAll() {
     return this.prisma.payment.findMany({
-      include: {
-        member: true,
-        allocations: {
-          include: { billingPeriod: true },
-        },
-      },
+      include: { member: true },
       orderBy: { paidAt: 'desc' },
     });
   }
 
   async create(dto: CreatePaymentDto) {
-    const allocationTotal = dto.allocations.reduce((sum, item) => sum + item.amount, 0);
-    if (allocationTotal > dto.amount) {
-      throw new BadRequestException('La imputacion supera el monto del pago');
-    }
+    const member = await this.prisma.member.findUnique({
+      where: { id: dto.memberId },
+    });
+    if (!member) throw new NotFoundException('Socio no encontrado');
 
-    return this.prisma.$transaction(async (tx) => {
-      const payment = await tx.payment.create({
+    const payment = await this.prisma.$transaction(async (tx) => {
+      const p = await tx.payment.create({
         data: {
           memberId: dto.memberId,
           paidAt: new Date(dto.paidAt),
           amount: dto.amount,
           methodCode: dto.methodCode,
           notes: dto.notes,
-          allocations: {
-            create: dto.allocations.map((allocation) => ({
-              billingPeriodId: allocation.billingPeriodId,
-              amount: allocation.amount,
-            })),
-          },
-        },
-        include: {
-          allocations: true,
         },
       });
 
       await tx.cashTransaction.create({
         data: {
           direction: 'IN',
-          sourceType: 'MEMBERSHIP_PAYMENT',
           occurredAt: new Date(dto.paidAt),
           amount: dto.amount,
           methodCode: dto.methodCode,
-          referenceId: payment.id,
-          description: `Cobro de cuota socio ${dto.memberId}`,
+          description: `Cuota socio ${member.lastName} ${member.firstName}`,
+          incomeType: 'MEMBERSHIP',
+          referenceId: p.id,
         },
       });
 
-      await this.auditService.logWithinTx(tx, {
-        entityName: 'payment',
-        entityId: payment.id,
-        action: 'CREATE',
-        afterData: payment,
+      // Imputar el pago a las deudas pendientes mas antiguas
+      let remaining = dto.amount;
+      const pendingCharges = await tx.charge.findMany({
+        where: {
+          memberId: dto.memberId,
+          paidAmount: { lt: tx.charge.fields.amount },
+        },
+        orderBy: { dueDate: 'asc' },
       });
 
-      return payment;
+      for (const charge of pendingCharges) {
+        if (remaining <= 0) break;
+        const debt = Number(charge.amount) - Number(charge.paidAmount);
+        const toApply = Math.min(remaining, debt);
+        await tx.charge.update({
+          where: { id: charge.id },
+          data: { paidAmount: { increment: toApply } },
+        });
+        await tx.paymentAllocation.create({
+          data: {
+            paymentId: p.id,
+            chargeId: charge.id,
+            amount: toApply,
+          },
+        });
+        remaining -= toApply;
+      }
+
+      return p;
     });
+
+    return payment;
   }
 
   async voidPayment(id: string) {
-    const payment = await this.prisma.payment.findUnique({
+    const payment = await this.prisma.payment.findUnique({ where: { id } });
+    if (!payment) throw new NotFoundException('Pago no encontrado');
+    return this.prisma.payment.update({
       where: { id },
+      data: { status: 'VOID' },
     });
+  }
 
-    if (!payment) {
-      throw new BadRequestException('Pago no encontrado');
-    }
-
-    return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.payment.update({
-        where: { id },
-        data: { status: 'VOID' },
-      });
-
-      await tx.paymentAllocation.updateMany({
-        where: { paymentId: id },
-        data: { status: 'VOID' },
-      });
-
-      await this.auditService.logWithinTx(tx, {
-        entityName: 'payment',
-        entityId: id,
-        action: 'VOID',
-        beforeData: payment,
-        afterData: updated,
-      });
-
-      return updated;
+  getMonthlySummary() {
+    return this.prisma.payment.groupBy({
+      by: ['paidAt'],
+      where: { status: 'REGISTERED' },
+      _sum: { amount: true },
+      orderBy: { paidAt: 'desc' },
     });
   }
 }
-

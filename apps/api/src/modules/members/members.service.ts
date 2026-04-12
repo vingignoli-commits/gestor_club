@@ -1,211 +1,117 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { ChangeMemberStatusDto } from './dto/change-member-status.dto';
 import { CreateMemberDto } from './dto/create-member.dto';
 import { UpdateMemberDto } from './dto/update-member.dto';
 
 @Injectable()
 export class MembersService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly auditService: AuditService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   findAll(search?: string) {
-    const where: Prisma.MemberWhereInput | undefined = search
-      ? {
-          OR: [
-            { firstName: { contains: search, mode: 'insensitive' } },
-            { lastName: { contains: search, mode: 'insensitive' } },
-            { documentNumber: { contains: search, mode: 'insensitive' } },
-          ],
-        }
-      : undefined;
-
     return this.prisma.member.findMany({
-      where,
-      include: {
-        category: true,
-      },
+      where: search
+        ? {
+            OR: [
+              { firstName: { contains: search, mode: 'insensitive' } },
+              { lastName: { contains: search, mode: 'insensitive' } },
+              { matricula: { contains: search, mode: 'insensitive' } },
+            ],
+          }
+        : undefined,
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
     });
   }
 
   async create(dto: CreateMemberDto) {
-    const member = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.member.create({
-        data: {
-          firstName: dto.firstName,
-          lastName: dto.lastName,
-          documentNumber: dto.documentNumber,
-          email: dto.email,
-          phone: dto.phone,
-          joinedAt: new Date(dto.joinedAt),
-          currentStatusCode: 'ACTIVE',
-          memberType: dto.memberType,
-          notes: dto.notes,
-          categoryId: dto.categoryId,
-          statusHistory: {
-            create: {
-              statusCode: 'ACTIVE',
-              effectiveFrom: new Date(dto.joinedAt),
-              reason: 'Alta inicial',
-            },
-          },
-          categoryHistory: {
-            create: {
-              categoryId: dto.categoryId,
-              effectiveFrom: new Date(dto.joinedAt),
-              reason: 'Categoria inicial',
-            },
-          },
-        },
-        include: {
-          category: true,
-          statusHistory: true,
-        },
-      });
-
-      await this.auditService.logWithinTx(tx, {
-        entityName: 'member',
-        entityId: created.id,
-        action: 'CREATE',
-        afterData: created,
-      });
-
-      return created;
+    return this.prisma.member.create({
+      data: {
+        matricula: dto.matricula,
+        firstName: dto.firstName,
+        lastName: dto.lastName,
+        category: dto.category,
+        status: dto.status ?? 'ACTIVE',
+        grade: dto.grade,
+        phone: dto.phone,
+        email: dto.email,
+        notes: dto.notes,
+        joinedAt: new Date(dto.joinedAt),
+      },
     });
-
-    return member;
   }
 
   async findOne(id: string) {
     const member = await this.prisma.member.findUnique({
       where: { id },
       include: {
-        category: true,
-        statusHistory: { orderBy: { effectiveFrom: 'desc' } },
-        categoryHistory: { orderBy: { effectiveFrom: 'desc' } },
+        charges: {
+          include: { billingPeriod: true },
+          orderBy: { dueDate: 'desc' },
+        },
         payments: {
-          include: {
-            allocations: {
-              include: {
-                billingPeriod: true,
-              },
-            },
-          },
           orderBy: { paidAt: 'desc' },
         },
       },
     });
-
-    if (!member) {
-      throw new NotFoundException('Socio no encontrado');
-    }
-
+    if (!member) throw new NotFoundException('Socio no encontrado');
     return member;
   }
 
   async update(id: string, dto: UpdateMemberDto) {
-    const before = await this.findOne(id);
-
-    const updated = await this.prisma.member.update({
+    await this.findOne(id);
+    return this.prisma.member.update({
       where: { id },
       data: {
         firstName: dto.firstName,
         lastName: dto.lastName,
-        email: dto.email,
+        category: dto.category,
+        status: dto.status,
+        grade: dto.grade,
         phone: dto.phone,
+        email: dto.email,
         notes: dto.notes,
       },
     });
-
-    await this.auditService.log({
-      entityName: 'member',
-      entityId: id,
-      action: 'UPDATE',
-      beforeData: before,
-      afterData: updated,
-    });
-
-    return updated;
   }
 
-  async changeStatus(id: string, dto: ChangeMemberStatusDto) {
-    await this.findOne(id);
-
-    return this.prisma.$transaction(async (tx) => {
-      const currentOpen = await tx.memberStatusHistory.findFirst({
-        where: { memberId: id, effectiveTo: null },
-        orderBy: { effectiveFrom: 'desc' },
-      });
-
-      if (currentOpen) {
-        await tx.memberStatusHistory.update({
-          where: { id: currentOpen.id },
-          data: { effectiveTo: new Date(dto.effectiveFrom) },
-        });
-      }
-
-      const status = await tx.memberStatusHistory.create({
-        data: {
-          memberId: id,
-          statusCode: dto.statusCode,
-          effectiveFrom: new Date(dto.effectiveFrom),
-          reason: dto.reason,
-        },
-      });
-
-      await tx.member.update({
-        where: { id },
-        data: { currentStatusCode: dto.statusCode },
-      });
-
-      await this.auditService.logWithinTx(tx, {
-        entityName: 'member_status_history',
-        entityId: status.id,
-        action: 'STATUS_CHANGE',
-        afterData: status,
-      });
-
-      return status;
-    });
-  }
-
-  async getAccountStatement(id: string) {
-    await this.findOne(id);
-
-    const charges = await this.prisma.charge.findMany({
-      where: { memberId: id, status: { not: 'VOID' } },
-      include: { billingPeriod: true },
-      orderBy: { dueDate: 'asc' },
-    });
-
-    const payments = await this.prisma.payment.findMany({
-      where: { memberId: id, status: { not: 'VOID' } },
+  async getDebtSummary() {
+    const members = await this.prisma.member.findMany({
       include: {
-        allocations: {
+        charges: {
           include: { billingPeriod: true },
         },
       },
-      orderBy: { paidAt: 'asc' },
     });
 
-    const totalCharges = charges.reduce((sum, item) => sum + Number(item.amount), 0);
-    const totalPaid = payments.reduce((sum, item) => sum + Number(item.amount), 0);
+    return members
+      .map((m) => {
+        const totalCharged = m.charges.reduce((s, c) => s + Number(c.amount), 0);
+        const totalPaid = m.charges.reduce((s, c) => s + Number(c.paidAmount), 0);
+        const debt = totalCharged - totalPaid;
+        return {
+          id: m.id,
+          matricula: m.matricula,
+          firstName: m.firstName,
+          lastName: m.lastName,
+          category: m.category,
+          status: m.status,
+          debt,
+          charges: m.charges,
+        };
+      })
+      .filter((m) => m.debt > 0);
+  }
 
+  async getAccountStatement(id: string) {
+    const member = await this.findOne(id);
+    const totalCharged = member.charges.reduce((s, c) => s + Number(c.amount), 0);
+    const totalPaid = member.charges.reduce((s, c) => s + Number(c.paidAmount), 0);
     return {
-      memberId: id,
+      member,
       summary: {
-        totalCharges,
+        totalCharged,
         totalPaid,
-        balance: totalCharges - totalPaid,
+        balance: totalCharged - totalPaid,
       },
-      charges,
-      payments,
     };
   }
 }
-

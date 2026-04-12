@@ -20,5 +20,9 @@ export class PaymentsController {
   voidPayment(@Param('id') id: string) {
     return this.paymentsService.voidPayment(id);
   }
-}
 
+  @Get('monthly-summary')
+  getMonthlySummary() {
+    return this.paymentsService.getMonthlySummary();
+  }
+}

@@ -1,18 +1,27 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get } from '@nestjs/common';
 import { ReportsService } from './reports.service';
 
 @Controller('reports')
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
-  @Get('members')
-  getMembersReport(@Query('status') status?: string) {
-    return this.reportsService.getMembersReport(status);
+  @Get('debtors')
+  getDebtors() {
+    return this.reportsService.getDebtors();
   }
 
-  @Get('delinquency')
-  getDelinquencyReport() {
-    return this.reportsService.getDelinquencyReport();
+  @Get('monthly-collection')
+  getMonthlyCollection() {
+    return this.reportsService.getMonthlyCollection();
+  }
+
+  @Get('cash-summary')
+  getCashSummary() {
+    return this.reportsService.getCashSummary();
+  }
+
+  @Get('members-by-category')
+  getMembersByCategory() {
+    return this.reportsService.getMembersByCategory();
   }
 }
-

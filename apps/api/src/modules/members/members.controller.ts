@@ -1,5 +1,4 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
-import { ChangeMemberStatusDto } from './dto/change-member-status.dto';
 import { CreateMemberDto } from './dto/create-member.dto';
 import { UpdateMemberDto } from './dto/update-member.dto';
 import { MembersService } from './members.service';
@@ -18,6 +17,11 @@ export class MembersController {
     return this.membersService.create(dto);
   }
 
+  @Get('debts')
+  getDebtSummary() {
+    return this.membersService.getDebtSummary();
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.membersService.findOne(id);
@@ -28,14 +32,8 @@ export class MembersController {
     return this.membersService.update(id, dto);
   }
 
-  @Post(':id/status-changes')
-  changeStatus(@Param('id') id: string, @Body() dto: ChangeMemberStatusDto) {
-    return this.membersService.changeStatus(id, dto);
-  }
-
   @Get(':id/account-statement')
   getAccountStatement(@Param('id') id: string) {
     return this.membersService.getAccountStatement(id);
   }
 }
-
