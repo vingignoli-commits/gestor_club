@@ -23,11 +23,7 @@ export function Sidebar() {
       </div>
       <nav className="space-y-2">
         {navigation.map((item) => (
-          
-            key={item.href}
-            href={item.href}
-            className="block rounded-2xl px-4 py-3 text-sm font-medium text-ink/75 transition hover:bg-accent hover:text-white"
-          >
+          <a key={item.href} href={item.href} className="block rounded-2xl px-4 py-3 text-sm font-medium text-ink/75 transition hover:bg-accent hover:text-white">
             {item.label}
           </a>
         ))}
@@ -36,18 +32,12 @@ export function Sidebar() {
         {user ? (
           <div className="space-y-2">
             <p className="px-2 text-xs text-ink/50">{user.fullName}</p>
-            <button
-              onClick={logout}
-              className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-left text-sm font-medium text-ink/75 transition hover:bg-warn/10 hover:text-warn"
-            >
+            <button onClick={logout} className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-left text-sm font-medium text-ink/75 transition hover:bg-warn/10 hover:text-warn">
               Cerrar sesion
             </button>
           </div>
         ) : (
-          
-            href="/login"
-            className="block rounded-2xl bg-accent px-4 py-3 text-center text-sm font-semibold text-white"
-          >
+          <a href="/login" className="block rounded-2xl bg-accent px-4 py-3 text-center text-sm font-semibold text-white">
             Ingresar
           </a>
         )}
