@@ -4,6 +4,7 @@ import { AppModule } from './app.module';
 import { execSync } from 'child_process';
 
 async function bootstrap() {
+  execSync('npx prisma generate', { stdio: 'inherit' });
   execSync('npx prisma db push --accept-data-loss', { stdio: 'inherit' });
   execSync('npx tsx prisma/seed.ts', { stdio: 'inherit' });
 
