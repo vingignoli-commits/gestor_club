@@ -6,13 +6,17 @@ export class WhatsappController {
   constructor(private readonly whatsappService: WhatsappService) {}
 
   @Get('templates')
-  listTemplates() {
-    return this.whatsappService.listTemplates();
+  getTemplates() {
+    return this.whatsappService.getTemplates();
   }
 
-  @Post('messages/send')
-  sendMessage(@Body() body: { memberId: string; templateId: string }) {
-    return this.whatsappService.sendIndividualMessage(body.memberId, body.templateId);
+  @Get('dispatches')
+  getDispatches() {
+    return this.whatsappService.getDispatches();
+  }
+
+  @Post('send')
+  send(@Body() body: { memberId: string; templateId: string; destination: string }) {
+    return this.whatsappService.sendMessage(body.memberId, body.templateId, body.destination);
   }
 }
-
