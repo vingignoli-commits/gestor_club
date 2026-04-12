@@ -25,7 +25,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get<DashboardData>('/dashboard')
+    api.get<DashboardData>('/dashboard/executive')
       .then(setData)
       .finally(() => setLoading(false));
   }, []);
@@ -33,27 +33,25 @@ export default function HomePage() {
   const kpis = data
     ? [
         { label: 'Socios Totales', value: String(data.cards.totalMembers), hint: 'Total de socios registrados' },
-        { label: 'Activos', value: String(data.cards.activeMembers), hint: `${Math.round((data.cards.activeMembers / data.cards.totalMembers) * 100)}% del padrón total` },
+        { label: 'Activos', value: String(data.cards.activeMembers), hint: `${Math.round((data.cards.activeMembers / data.cards.totalMembers) * 100)}% del padron total` },
         { label: 'Morosos', value: String(data.cards.delinquentMembers), hint: 'Con deuda pendiente' },
-        { label: 'Recaudación', value: fmt(data.cards.collectedAmount), hint: 'Total acumulado' },
+        { label: 'Recaudacion', value: fmt(data.cards.collectedAmount), hint: 'Total acumulado' },
       ]
     : [
         { label: 'Socios Totales', value: '...', hint: '' },
         { label: 'Activos', value: '...', hint: '' },
         { label: 'Morosos', value: '...', hint: '' },
-        { label: 'Recaudación', value: '...', hint: '' },
+        { label: 'Recaudacion', value: '...', hint: '' },
       ];
 
   return (
     <div className="space-y-8">
       <Topbar />
-
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {kpis.map(item => (
           <KpiCard key={item.label} {...item} />
         ))}
       </section>
-
       <SectionCard title="Alertas operativas" description="Estado actual del sistema.">
         {loading ? (
           <p className="text-sm text-ink/50">Cargando...</p>
