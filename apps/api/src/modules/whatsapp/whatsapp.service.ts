@@ -1,56 +1,36 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { AuditService } from '../audit/audit.service';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class WhatsappService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly auditService: AuditService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  listTemplates() {
+  getTemplates() {
     return this.prisma.whatsappTemplate.findMany({
-      orderBy: { name: 'asc' },
+      where: { isActive: true },
     });
   }
 
-  async sendIndividualMessage(memberId: string, templateId: string) {
-    const [member, template] = await Promise.all([
-      this.prisma.member.findUnique({ where: { id: memberId } }),
-      this.prisma.whatsappTemplate.findUnique({ where: { id: templateId } }),
-    ]);
+  getDispatches() {
+    return this.prisma.messageDispatch.findMany({
+      include: { member: true, template: true },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 
-    if (!member) {
-      throw new NotFoundException('Socio no encontrado');
-    }
-    if (!template) {
-      throw new NotFoundException('Plantilla no encontrada');
-    }
+  async sendMessage(memberId: string, templateId: string, destination: string) {
+    const template = await this.prisma.whatsappTemplate.findUnique({
+      where: { id: templateId },
+    });
 
-    const renderedBody = template.body
-      .replace('{{nombre}}', member.firstName)
-      .replace('{{apellido}}', member.lastName);
-
-    const dispatch = await this.prisma.messageDispatch.create({
+    return this.prisma.messageDispatch.create({
       data: {
         memberId,
         templateId,
-        channel: 'WHATSAPP',
-        destination: member.phone ?? 'SIN_TELEFONO',
-        renderedBody,
+        destination,
+        renderedBody: template?.body ?? '',
         status: 'PENDING',
       },
     });
-
-    await this.auditService.log({
-      entityName: 'message_dispatch',
-      entityId: dispatch.id,
-      action: 'CREATE',
-      afterData: dispatch,
-    });
-
-    return dispatch;
   }
 }
-
