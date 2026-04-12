@@ -19,7 +19,7 @@ export class PaymentsService {
     });
     if (!member) throw new NotFoundException('Socio no encontrado');
 
-    const payment = await this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx) => {
       const p = await tx.payment.create({
         data: {
           memberId: dto.memberId,
@@ -42,38 +42,8 @@ export class PaymentsService {
         },
       });
 
-      // Imputar el pago a las deudas pendientes mas antiguas
-      let remaining = dto.amount;
-      const pendingCharges = await tx.charge.findMany({
-        where: {
-          memberId: dto.memberId,
-          paidAmount: { lt: tx.charge.fields.amount },
-        },
-        orderBy: { dueDate: 'asc' },
-      });
-
-      for (const charge of pendingCharges) {
-        if (remaining <= 0) break;
-        const debt = Number(charge.amount) - Number(charge.paidAmount);
-        const toApply = Math.min(remaining, debt);
-        await tx.charge.update({
-          where: { id: charge.id },
-          data: { paidAmount: { increment: toApply } },
-        });
-        await tx.paymentAllocation.create({
-          data: {
-            paymentId: p.id,
-            chargeId: charge.id,
-            amount: toApply,
-          },
-        });
-        remaining -= toApply;
-      }
-
       return p;
     });
-
-    return payment;
   }
 
   async voidPayment(id: string) {
@@ -86,10 +56,8 @@ export class PaymentsService {
   }
 
   getMonthlySummary() {
-    return this.prisma.payment.groupBy({
-      by: ['paidAt'],
+    return this.prisma.payment.findMany({
       where: { status: 'REGISTERED' },
-      _sum: { amount: true },
       orderBy: { paidAt: 'desc' },
     });
   }

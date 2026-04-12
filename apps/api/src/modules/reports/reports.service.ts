@@ -72,10 +72,29 @@ export class ReportsService {
   }
 
   async getMembersByCategory() {
-    const members = await this.prisma.member.groupBy({
-      by: ['category', 'status'],
-      _count: { id: true },
+    const members = await this.prisma.member.findMany({
+      select: {
+        category: true,
+        status: true,
+      },
     });
-    return members;
+
+    const grouped: Record<string, { active: number; inactive: number }> = {};
+    for (const m of members) {
+      if (!grouped[m.category]) {
+        grouped[m.category] = { active: 0, inactive: 0 };
+      }
+      if (m.status === 'ACTIVE') {
+        grouped[m.category].active++;
+      } else {
+        grouped[m.category].inactive++;
+      }
+    }
+
+    return Object.entries(grouped).map(([category, counts]) => ({
+      category,
+      ...counts,
+      total: counts.active + counts.inactive,
+    }));
   }
 }

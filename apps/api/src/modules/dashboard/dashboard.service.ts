@@ -23,15 +23,11 @@ export class DashboardService {
 
     const totalCharged = charges.reduce((s, c) => s + Number(c.amount), 0);
     const totalPaid = charges.reduce((s, c) => s + Number(c.paidAmount), 0);
-    const delinquentMembers = await this.prisma.member.count({
-      where: {
-        charges: {
-          some: {
-            paidAmount: { lt: this.prisma.charge.fields.amount },
-          },
-        },
-      },
-    });
+    const delinquentCharges = charges.filter(
+      (c) => Number(c.paidAmount) < Number(c.amount)
+    );
+    const delinquentMemberIds = new Set(delinquentCharges.map((c) => c.memberId));
+    const delinquentMembers = delinquentMemberIds.size;
 
     const income = transactions.find((t) => t.direction === 'IN')?._sum.amount ?? 0;
     const expense = transactions.find((t) => t.direction === 'OUT')?._sum.amount ?? 0;
