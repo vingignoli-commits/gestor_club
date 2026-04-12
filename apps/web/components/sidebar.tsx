@@ -18,7 +18,7 @@ export function Sidebar() {
   return (
     <aside className="hidden w-72 shrink-0 border-r border-ink/10 bg-panel/80 px-5 py-6 backdrop-blur lg:block">
       <div className="mb-8">
-        <p className="font-display text-lg font-semibold tracking-tight leading-tight">PROGRESO Nº 100</p>
+        <p className="font-display text-lg font-semibold tracking-tight leading-tight">R.·.L.·. PROGRESO Nº 100</p>
         <p className="mt-2 text-sm text-ink/60">Administracion integral</p>
       </div>
       <nav className="space-y-2">
