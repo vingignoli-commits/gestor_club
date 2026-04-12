@@ -21,7 +21,6 @@ export function Sidebar() {
         <p className="font-display text-lg font-semibold tracking-tight leading-tight">TESORERIA PROGRESO N 100</p>
         <p className="mt-2 text-sm text-ink/60">Administracion integral</p>
       </div>
-
       <nav className="space-y-2">
         {navigation.map((item) => (
           
@@ -33,7 +32,6 @@ export function Sidebar() {
           </a>
         ))}
       </nav>
-
       <div className="mt-8 border-t border-ink/10 pt-6">
         {user ? (
           <div className="space-y-2">
