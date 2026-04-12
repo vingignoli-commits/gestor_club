@@ -11,8 +11,10 @@ type Member = {
   documentNumber: string;
   currentStatusCode: string;
   memberType: string;
-  category: { name: string };
+  category: { id: string; name: string };
 };
+
+type Category = { id: string; name: string };
 
 const STATUS_LABELS: Record<string, string> = {
   ACTIVE: 'Activo',
@@ -22,10 +24,15 @@ const STATUS_LABELS: Record<string, string> = {
 
 export default function MembersPage() {
   const [members, setMembers] = useState<Member[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ firstName: '', lastName: '', documentNumber: '', email: '', phone: '', joinedAt: '', memberType: 'TITULAR', categoryId: '', notes: '' });
+  const [form, setForm] = useState({
+    firstName: '', lastName: '', documentNumber: '',
+    email: '', phone: '', joinedAt: '',
+    memberType: 'TITULAR', categoryId: '', notes: ''
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -36,7 +43,23 @@ export default function MembersPage() {
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    // Derivar categorías únicas de los socios existentes
+    api.get<Member[]>('/members').then(ms => {
+      const seen = new Map<string, Category>();
+      ms.forEach(m => {
+        if (m.category && !seen.has(m.category.id)) {
+          seen.set(m.category.id, m.category);
+        }
+      });
+      const cats = Array.from(seen.values());
+      setCategories(cats);
+      if (cats.length > 0) {
+        setForm(f => ({ ...f, categoryId: cats[0].id }));
+      }
+    });
+  }, []);
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -48,9 +71,12 @@ export default function MembersPage() {
     setError('');
     setSaving(true);
     try {
-      await api.post('/members', form);
+      await api.post('/members', {
+        ...form,
+        joinedAt: new Date(form.joinedAt).toISOString(),
+      });
       setShowForm(false);
-      setForm({ firstName: '', lastName: '', documentNumber: '', email: '', phone: '', joinedAt: '', memberType: 'TITULAR', categoryId: '', notes: '' });
+      setForm({ firstName: '', lastName: '', documentNumber: '', email: '', phone: '', joinedAt: '', memberType: 'TITULAR', categoryId: categories[0]?.id ?? '', notes: '' });
       load();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error al guardar');
@@ -137,7 +163,12 @@ export default function MembersPage() {
                   <option value="VITALICIO">Vitalicio</option>
                   <option value="INVITADO">Invitado</option>
                 </select>
-                <input className="rounded-2xl border border-ink/10 px-4 py-3" placeholder="ID de categoría" value={form.categoryId} onChange={e => setForm(f => ({ ...f, categoryId: e.target.value }))} required />
+                <select className="rounded-2xl border border-ink/10 px-4 py-3" value={form.categoryId} onChange={e => setForm(f => ({ ...f, categoryId: e.target.value }))} required>
+                  <option value="">Seleccionar categoría</option>
+                  {categories.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
               </div>
               <input className="w-full rounded-2xl border border-ink/10 px-4 py-3" placeholder="Notas (opcional)" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
               {error && <p className="rounded-2xl bg-warn/10 px-4 py-3 text-sm text-warn">{error}</p>}
