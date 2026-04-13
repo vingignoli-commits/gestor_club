@@ -17,16 +17,26 @@ export class PaymentsService {
     const member = await this.prisma.member.findUnique({
       where: { id: dto.memberId },
     });
-    if (!member) throw new NotFoundException('Socio no encontrado');
+
+    if (!member) {
+      throw new NotFoundException('Socio no encontrado');
+    }
+
+    const periodLabel = `${String(dto.periodMonth).padStart(2, '0')}/${dto.periodYear}`;
 
     return this.prisma.$transaction(async (tx) => {
-      const p = await tx.payment.create({
+      const payment = await tx.payment.create({
         data: {
           memberId: dto.memberId,
           paidAt: new Date(dto.paidAt),
+          periodYear: dto.periodYear,
+          periodMonth: dto.periodMonth,
           amount: dto.amount,
           methodCode: dto.methodCode,
           notes: dto.notes,
+        },
+        include: {
+          member: true,
         },
       });
 
@@ -36,29 +46,22 @@ export class PaymentsService {
           occurredAt: new Date(dto.paidAt),
           amount: dto.amount,
           methodCode: dto.methodCode,
-          description: `Cuota socio ${member.lastName} ${member.firstName}`,
           incomeType: 'MEMBERSHIP',
-          referenceId: p.id,
+          description: `Cobro cuota ${periodLabel} - ${member.lastName}, ${member.firstName}`,
+          receiptNote: dto.notes || null,
+          referenceId: payment.id,
+          notes: dto.notes || null,
         },
       });
 
-      return p;
+      return payment;
     });
   }
 
-  async voidPayment(id: string) {
-    const payment = await this.prisma.payment.findUnique({ where: { id } });
-    if (!payment) throw new NotFoundException('Pago no encontrado');
-    return this.prisma.payment.update({
+  findOne(id: string) {
+    return this.prisma.payment.findUnique({
       where: { id },
-      data: { status: 'VOID' },
-    });
-  }
-
-  getMonthlySummary() {
-    return this.prisma.payment.findMany({
-      where: { status: 'REGISTERED' },
-      orderBy: { paidAt: 'desc' },
+      include: { member: true },
     });
   }
 }
