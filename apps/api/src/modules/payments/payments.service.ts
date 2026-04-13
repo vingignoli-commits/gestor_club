@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PaymentStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
@@ -21,6 +25,21 @@ export class PaymentsService {
 
     if (!member) {
       throw new NotFoundException('Socio no encontrado');
+    }
+
+    const existingPayment = await this.prisma.payment.findFirst({
+      where: {
+        memberId: dto.memberId,
+        periodYear: dto.periodYear,
+        periodMonth: dto.periodMonth,
+        status: PaymentStatus.REGISTERED,
+      },
+    });
+
+    if (existingPayment) {
+      throw new ConflictException(
+        `El mes ${String(dto.periodMonth).padStart(2, '0')}/${dto.periodYear} ya está cargado para este socio.`,
+      );
     }
 
     const periodLabel = `${String(dto.periodMonth).padStart(2, '0')}/${dto.periodYear}`;
