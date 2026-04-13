@@ -79,6 +79,17 @@ function gradeLabel(value: string | null) {
   return GRADE_OPTIONS.find((option) => option.value === value)?.label ?? value;
 }
 
+function buildWhatsappLink(member: Member) {
+  if (!member.phone) return null;
+
+  const celular = member.phone.replace(/\D/g, '');
+  if (!celular) return null;
+
+  const saludo = member.grade === 'MAESTRO' ? 'Hola V.·.H.·.' : 'Hola Q.·.H.·.';
+  const texto = `${saludo} ${member.firstName}`;
+  return `https://wa.me/${celular}?text=${encodeURIComponent(texto)}`;
+}
+
 export default function MembersPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [search, setSearch] = useState('');
@@ -259,32 +270,50 @@ export default function MembersPage() {
                 </tr>
               </thead>
               <tbody>
-                {members.map((m) => (
-                  <tr key={m.id} className="rounded-2xl bg-ink/5 text-sm">
-                    <td className="rounded-l-2xl px-3 py-3 font-semibold text-ink">
-                      {m.matricula}
-                    </td>
-                    <td className="px-3 py-3 text-ink">
-                      {m.lastName}, {m.firstName}
-                    </td>
-                    <td className="px-3 py-3 text-ink/80">{categoryLabel(m.category)}</td>
-                    <td className="px-3 py-3 text-ink/80">{gradeLabel(m.grade)}</td>
-                    <td className="px-3 py-3 text-ink/80">{m.phone ?? '-'}</td>
-                    <td className="px-3 py-3 text-ink/80">{m.email ?? '-'}</td>
-                    <td className="px-3 py-3 text-ink/80">
-                      {statusLabel(m.status)}
-                    </td>
-                    <td className="rounded-r-2xl px-3 py-3">
-                      <button
-                        type="button"
-                        onClick={() => openEdit(m)}
-                        className="rounded-xl border border-ink/10 px-3 py-2 text-xs font-semibold"
-                      >
-                        Editar
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {members.map((m) => {
+                  const whatsappLink = buildWhatsappLink(m);
+
+                  return (
+                    <tr key={m.id} className="rounded-2xl bg-ink/5 text-sm">
+                      <td className="rounded-l-2xl px-3 py-3 font-semibold text-ink">
+                        {m.matricula}
+                      </td>
+                      <td className="px-3 py-3 text-ink">
+                        {m.lastName}, {m.firstName}
+                      </td>
+                      <td className="px-3 py-3 text-ink/80">{categoryLabel(m.category)}</td>
+                      <td className="px-3 py-3 text-ink/80">{gradeLabel(m.grade)}</td>
+                      <td className="px-3 py-3 text-ink/80">
+                        {m.phone ? (
+                          <a
+                            href={whatsappLink ?? undefined}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="underline decoration-ink/30 underline-offset-4 hover:text-accent"
+                            title="Abrir WhatsApp"
+                          >
+                            {m.phone}
+                          </a>
+                        ) : (
+                          '-'
+                        )}
+                      </td>
+                      <td className="px-3 py-3 text-ink/80">{m.email ?? '-'}</td>
+                      <td className="px-3 py-3 text-ink/80">
+                        {statusLabel(m.status)}
+                      </td>
+                      <td className="rounded-r-2xl px-3 py-3">
+                        <button
+                          type="button"
+                          onClick={() => openEdit(m)}
+                          className="rounded-xl border border-ink/10 px-3 py-2 text-xs font-semibold"
+                        >
+                          Editar
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
