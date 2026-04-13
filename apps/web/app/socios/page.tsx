@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { SectionCard } from '../../components/section-card';
 import { api } from '../../lib/api';
 
@@ -15,128 +15,245 @@ type Member = {
   phone: string | null;
   email: string | null;
   notes: string | null;
+  joinedAt: string;
 };
 
-const CATEGORY_LABELS: Record<string, string> = {
-  SIMPLE: 'Simple',
-  DOBLE: 'Doble',
-  ESTUDIANTE: 'Estudiante',
-  SOCIAL: 'Social',
-  MENOR: 'Menor',
-  HONOR: 'Honor',
+type MemberForm = {
+  matricula: string;
+  firstName: string;
+  lastName: string;
+  category: string;
+  status: string;
+  grade: string;
+  phone: string;
+  email: string;
+  notes: string;
+  joinedAt: string;
 };
+
+const CATEGORY_OPTIONS = [
+  { value: 'SIMPLE', label: 'Simple' },
+  { value: 'DOBLE', label: 'Doble' },
+  { value: 'ESTUDIANTE', label: 'Estudiante' },
+  { value: 'SOCIAL', label: 'Social' },
+  { value: 'MENOR', label: 'Menor' },
+  { value: 'HONOR', label: 'Honor' },
+];
+
+const STATUS_OPTIONS = [
+  { value: 'ACTIVE', label: 'Activo' },
+  { value: 'INACTIVE', label: 'Inactivo' },
+];
+
+const GRADE_OPTIONS = [
+  { value: 'APRENDIZ', label: 'Aprendiz' },
+  { value: 'COMPANERO', label: 'Compañero' },
+  { value: 'MAESTRO', label: 'Maestro' },
+];
+
+function emptyForm(): MemberForm {
+  return {
+    matricula: '',
+    firstName: '',
+    lastName: '',
+    category: 'SIMPLE',
+    status: 'ACTIVE',
+    grade: 'APRENDIZ',
+    phone: '',
+    email: '',
+    notes: '',
+    joinedAt: new Date().toISOString().split('T')[0],
+  };
+}
+
+function categoryLabel(value: string) {
+  return CATEGORY_OPTIONS.find((option) => option.value === value)?.label ?? value;
+}
+
+function statusLabel(value: string) {
+  return STATUS_OPTIONS.find((option) => option.value === value)?.label ?? value;
+}
+
+function gradeLabel(value: string | null) {
+  if (!value) return '-';
+  return GRADE_OPTIONS.find((option) => option.value === value)?.label ?? value;
+}
 
 export default function MembersPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({
-    matricula: '', firstName: '', lastName: '',
-    category: 'SIMPLE', status: 'ACTIVE',
-    grade: '', phone: '', email: '', notes: '',
-    joinedAt: new Date().toISOString().split('T')[0],
-  });
+  const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
+  const [form, setForm] = useState<MemberForm>(emptyForm());
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  const isEditing = useMemo(() => editingMemberId !== null, [editingMemberId]);
+
   function load(q?: string) {
     setLoading(true);
-    api.get<Member[]>(`/members${q ? `?search=${encodeURIComponent(q)}` : ''}`)
+    api
+      .get<Member[]>(`/members${q ? `?search=${encodeURIComponent(q)}` : ''}`)
       .then(setMembers)
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     load(search);
   }
 
-  async function handleCreate(e: React.FormEvent) {
+  function openCreate() {
+    setEditingMemberId(null);
+    setForm(emptyForm());
+    setError('');
+    setShowForm(true);
+  }
+
+  function openEdit(member: Member) {
+    setEditingMemberId(member.id);
+    setForm({
+      matricula: member.matricula,
+      firstName: member.firstName,
+      lastName: member.lastName,
+      category: member.category,
+      status: member.status,
+      grade: member.grade ?? 'APRENDIZ',
+      phone: member.phone ?? '',
+      email: member.email ?? '',
+      notes: member.notes ?? '',
+      joinedAt: member.joinedAt.split('T')[0],
+    });
+    setError('');
+    setShowForm(true);
+  }
+
+  function closeForm() {
+    setShowForm(false);
+    setEditingMemberId(null);
+    setForm(emptyForm());
+    setError('');
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     setSaving(true);
+
+    const payload = {
+      matricula: form.matricula.trim(),
+      firstName: form.firstName.trim(),
+      lastName: form.lastName.trim(),
+      category: form.category,
+      status: form.status,
+      grade: form.grade,
+      phone: form.phone.trim() || undefined,
+      email: form.email.trim() || undefined,
+      notes: form.notes.trim() || undefined,
+      joinedAt: form.joinedAt,
+    };
+
     try {
-      await api.post('/members', {
-        ...form,
-        joinedAt: new Date(form.joinedAt).toISOString(),
-      });
-      setShowForm(false);
-      setForm({ matricula: '', firstName: '', lastName: '', category: 'SIMPLE', status: 'ACTIVE', grade: '', phone: '', email: '', notes: '', joinedAt: new Date().toISOString().split('T')[0] });
-      load();
+      if (isEditing && editingMemberId) {
+        await api.patch(`/members/${editingMemberId}`, payload);
+      } else {
+        await api.post('/members', payload);
+      }
+
+      closeForm();
+      load(search);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Error al guardar');
+      setError(err instanceof Error ? err.message : 'Error al guardar socio');
     } finally {
       setSaving(false);
     }
   }
 
-  const activos = members.filter(m => m.status === 'ACTIVE').length;
-  const inactivos = members.filter(m => m.status === 'INACTIVE').length;
-
   return (
     <div className="space-y-6">
-      <SectionCard title="Padron de socios" description="Gestion de socios de TESORERIA PROGRESO N 100.">
-        <div className="mb-5 flex items-center justify-between gap-3">
-          <div className="flex gap-4 text-sm">
-            <span className="rounded-full bg-accent/10 px-3 py-1 text-accent font-semibold">{activos} activos</span>
-            <span className="rounded-full bg-ink/10 px-3 py-1 text-ink/60 font-semibold">{inactivos} inactivos</span>
-          </div>
+      <SectionCard
+        title="Socios"
+        description="Alta, edición y consulta del padrón de socios."
+      >
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <form onSubmit={handleSearch} className="flex w-full gap-3 md:max-w-xl">
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por apellido, nombre, matrícula, email o teléfono"
+              className="flex-1 rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+            />
+            <button
+              type="submit"
+              className="rounded-2xl border border-ink/10 px-5 py-3 text-sm font-semibold"
+            >
+              Buscar
+            </button>
+          </form>
+
           <button
-            onClick={() => setShowForm(true)}
+            type="button"
+            onClick={openCreate}
             className="rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-white"
           >
             + Nuevo socio
           </button>
         </div>
 
-        <form onSubmit={handleSearch} className="mb-5 flex gap-3">
-          <input
-            className="flex-1 rounded-2xl border border-ink/10 px-4 py-3"
-            placeholder="Buscar por nombre, apellido o matricula"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-          <button type="submit" className="rounded-2xl bg-ink/10 px-5 py-3 text-sm font-semibold">
-            Buscar
-          </button>
-        </form>
-
         {loading ? (
-          <p className="py-8 text-center text-sm text-ink/50">Cargando socios...</p>
+          <div className="py-8 text-sm text-ink/60">Cargando socios...</div>
+        ) : members.length === 0 ? (
+          <div className="py-8 text-sm text-ink/60">No se encontraron socios.</div>
         ) : (
-          <div className="overflow-hidden rounded-2xl border border-ink/10">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-ink/5 text-ink/60">
-                <tr>
-                  <th className="px-4 py-3">Matricula</th>
-                  <th className="px-4 py-3">Socio</th>
-                  <th className="px-4 py-3">Categoria</th>
-                  <th className="px-4 py-3">Grado</th>
-                  <th className="px-4 py-3">Celular</th>
-                  <th className="px-4 py-3">Estado</th>
+          <div className="mt-6 overflow-x-auto">
+            <table className="min-w-full border-separate border-spacing-y-2">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wide text-ink/50">
+                  <th className="px-3 py-2">Matrícula</th>
+                  <th className="px-3 py-2">Socio</th>
+                  <th className="px-3 py-2">Categoría</th>
+                  <th className="px-3 py-2">Estado</th>
+                  <th className="px-3 py-2">Grado</th>
+                  <th className="px-3 py-2">Teléfono</th>
+                  <th className="px-3 py-2">Email</th>
+                  <th className="px-3 py-2">Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {members.length === 0 && (
-                  <tr><td colSpan={6} className="px-4 py-8 text-center text-ink/50">No se encontraron socios.</td></tr>
-                )}
-                {members.map(m => (
-                  <tr key={m.id} className="border-t border-ink/10 bg-white hover:bg-ink/5">
-                    <td className="px-4 py-3 font-mono text-sm text-ink/60">{m.matricula}</td>
-                    <td className="px-4 py-3">
-                      <p className="font-medium">{m.lastName}, {m.firstName}</p>
-                      {m.email && <p className="text-xs text-ink/50">{m.email}</p>}
+                {members.map((member) => (
+                  <tr key={member.id} className="rounded-2xl bg-ink/5 text-sm">
+                    <td className="rounded-l-2xl px-3 py-3 font-semibold text-ink">
+                      {member.matricula}
                     </td>
-                    <td className="px-4 py-3">{CATEGORY_LABELS[m.category] ?? m.category}</td>
-                    <td className="px-4 py-3 text-ink/60">{m.grade ?? '-'}</td>
-                    <td className="px-4 py-3 text-ink/60">{m.phone ?? '-'}</td>
-                    <td className="px-4 py-3">
-                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${m.status === 'ACTIVE' ? 'bg-accent/10 text-accent' : 'bg-ink/10 text-ink/50'}`}>
-                        {m.status === 'ACTIVE' ? 'Activo' : 'Inactivo'}
-                      </span>
+                    <td className="px-3 py-3 text-ink">
+                      {member.lastName}, {member.firstName}
+                    </td>
+                    <td className="px-3 py-3 text-ink/80">
+                      {categoryLabel(member.category)}
+                    </td>
+                    <td className="px-3 py-3 text-ink/80">
+                      {statusLabel(member.status)}
+                    </td>
+                    <td className="px-3 py-3 text-ink/80">
+                      {gradeLabel(member.grade)}
+                    </td>
+                    <td className="px-3 py-3 text-ink/80">{member.phone ?? '-'}</td>
+                    <td className="px-3 py-3 text-ink/80">{member.email ?? '-'}</td>
+                    <td className="rounded-r-2xl px-3 py-3">
+                      <button
+                        type="button"
+                        onClick={() => openEdit(member)}
+                        className="rounded-xl border border-ink/10 px-3 py-2 text-xs font-semibold"
+                      >
+                        Editar
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -147,43 +264,191 @@ export default function MembersPage() {
       </SectionCard>
 
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-[2rem] bg-panel p-8 shadow-card max-h-[90vh] overflow-y-auto">
-            <h2 className="mb-5 font-display text-2xl font-semibold">Nuevo socio</h2>
-            <form onSubmit={handleCreate} className="space-y-3">
-              <div className="grid gap-3 md:grid-cols-2">
-                <input className="rounded-2xl border border-ink/10 px-4 py-3" placeholder="Matricula *" value={form.matricula} onChange={e => setForm(f => ({ ...f, matricula: e.target.value }))} required />
-                <input className="rounded-2xl border border-ink/10 px-4 py-3" placeholder="Nombre *" value={form.firstName} onChange={e => setForm(f => ({ ...f, firstName: e.target.value }))} required />
-                <input className="rounded-2xl border border-ink/10 px-4 py-3" placeholder="Apellido *" value={form.lastName} onChange={e => setForm(f => ({ ...f, lastName: e.target.value }))} required />
-                <input className="rounded-2xl border border-ink/10 px-4 py-3" placeholder="Grado" value={form.grade} onChange={e => setForm(f => ({ ...f, grade: e.target.value }))} />
-                <input className="rounded-2xl border border-ink/10 px-4 py-3" placeholder="Celular" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
-                <input className="rounded-2xl border border-ink/10 px-4 py-3" placeholder="Email" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
-                <select className="rounded-2xl border border-ink/10 px-4 py-3" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
-                  <option value="SIMPLE">Simple</option>
-                  <option value="DOBLE">Doble</option>
-                  <option value="ESTUDIANTE">Estudiante</option>
-                  <option value="SOCIAL">Social</option>
-                  <option value="MENOR">Menor</option>
-                  <option value="HONOR">Honor</option>
-                </select>
-                <select className="rounded-2xl border border-ink/10 px-4 py-3" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
-                  <option value="ACTIVE">Activo</option>
-                  <option value="INACTIVE">Inactivo</option>
-                </select>
-                <div className="md:col-span-2">
-                  <label className="mb-1 block text-xs text-ink/50">Fecha de alta *</label>
-                  <input className="w-full rounded-2xl border border-ink/10 px-4 py-3" type="date" value={form.joinedAt} onChange={e => setForm(f => ({ ...f, joinedAt: e.target.value }))} required />
-                </div>
+        <SectionCard
+          title={isEditing ? 'Editar socio' : 'Nuevo socio'}
+          description="Los valores posibles de grado son Aprendiz, Compañero y Maestro."
+        >
+          <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-ink/80">
+                Matrícula
+              </label>
+              <input
+                value={form.matricula}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, matricula: e.target.value }))
+                }
+                required
+                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-ink/80">
+                Fecha de alta
+              </label>
+              <input
+                type="date"
+                value={form.joinedAt}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, joinedAt: e.target.value }))
+                }
+                required
+                disabled={isEditing}
+                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm disabled:bg-ink/5"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-ink/80">
+                Nombre
+              </label>
+              <input
+                value={form.firstName}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, firstName: e.target.value }))
+                }
+                required
+                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-ink/80">
+                Apellido
+              </label>
+              <input
+                value={form.lastName}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, lastName: e.target.value }))
+                }
+                required
+                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-ink/80">
+                Categoría
+              </label>
+              <select
+                value={form.category}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, category: e.target.value }))
+                }
+                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+              >
+                {CATEGORY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-ink/80">
+                Estado
+              </label>
+              <select
+                value={form.status}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, status: e.target.value }))
+                }
+                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+              >
+                {STATUS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-ink/80">
+                Grado
+              </label>
+              <select
+                value={form.grade}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, grade: e.target.value }))
+                }
+                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+              >
+                {GRADE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-ink/80">
+                Teléfono
+              </label>
+              <input
+                value={form.phone}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, phone: e.target.value }))
+                }
+                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="mb-2 block text-sm font-medium text-ink/80">
+                Email
+              </label>
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, email: e.target.value }))
+                }
+                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="mb-2 block text-sm font-medium text-ink/80">
+                Notas
+              </label>
+              <textarea
+                value={form.notes}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, notes: e.target.value }))
+                }
+                rows={4}
+                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+              />
+            </div>
+
+            {error && (
+              <div className="md:col-span-2 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">
+                {error}
               </div>
-              <textarea className="w-full rounded-2xl border border-ink/10 px-4 py-3" placeholder="Observaciones" rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
-              {error && <p className="rounded-2xl bg-warn/10 px-4 py-3 text-sm text-warn">{error}</p>}
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowForm(false)} className="flex-1 rounded-2xl border border-ink/10 px-4 py-3 text-sm font-semibold">Cancelar</button>
-                <button type="submit" disabled={saving} className="flex-1 rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white disabled:opacity-60">{saving ? 'Guardando...' : 'Guardar'}</button>
-              </div>
-            </form>
-          </div>
-        </div>
+            )}
+
+            <div className="md:col-span-2 flex gap-3">
+              <button
+                type="button"
+                onClick={closeForm}
+                className="flex-1 rounded-2xl border border-ink/10 px-4 py-3 text-sm font-semibold"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="flex-1 rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {saving ? 'Guardando...' : isEditing ? 'Guardar cambios' : 'Crear socio'}
+              </button>
+            </div>
+          </form>
+        </SectionCard>
       )}
     </div>
   );
