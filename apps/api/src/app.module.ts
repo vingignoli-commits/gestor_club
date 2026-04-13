@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './modules/auth/auth.module';
 import { AuditModule } from './modules/audit/audit.module';
+import { CashModule } from './modules/cash/cash.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { MembersModule } from './modules/members/members.module';
 import { PaymentsModule } from './modules/payments/payments.module';
@@ -16,6 +17,7 @@ import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
     AuthModule,
     MembersModule,
     PaymentsModule,
+    CashModule,
     DashboardModule,
     ReportsModule,
     AuditModule,
