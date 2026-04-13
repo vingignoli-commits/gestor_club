@@ -46,6 +46,38 @@ type CashTransaction = {
   receiptNote: string | null;
 };
 
+type MemberDebtMonth = {
+  periodYear: number;
+  periodMonth: number;
+  label: string;
+  category: string;
+  amount: number;
+  overdue: boolean;
+  isCurrentMonth: boolean;
+};
+
+type MemberAccountStatement = {
+  member: {
+    id: string;
+    matricula: string;
+    firstName: string;
+    lastName: string;
+    category: string;
+    status: string;
+  };
+  summary: {
+    totalDebt: number;
+    monthsOwed: number;
+    owesCurrentMonth: boolean;
+    overdueMonthsCount: number;
+    overdueMonthLabels: string[];
+    debtLevel: 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH';
+    debtLevelLabel: string;
+    debtColor: 'gray' | 'green' | 'yellow' | 'red';
+    months: MemberDebtMonth[];
+  };
+};
+
 function fmt(n: number) {
   return new Intl.NumberFormat('es-AR', {
     style: 'currency',
@@ -59,6 +91,22 @@ function monthInputDefault() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
+function debtBadgeClasses(color: 'gray' | 'green' | 'yellow' | 'red') {
+  if (color === 'green') {
+    return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  }
+
+  if (color === 'yellow') {
+    return 'border-amber-200 bg-amber-50 text-amber-700';
+  }
+
+  if (color === 'red') {
+    return 'border-rose-200 bg-rose-50 text-rose-700';
+  }
+
+  return 'border-slate-200 bg-slate-50 text-slate-700';
+}
+
 export default function TreasuryPage() {
   const [tab, setTab] = useState<'pagos' | 'caja'>('pagos');
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -70,6 +118,9 @@ export default function TreasuryPage() {
     balance: number;
     transactions: CashTransaction[];
   } | null>(null);
+
+  const [memberStatement, setMemberStatement] =
+    useState<MemberAccountStatement | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -143,10 +194,16 @@ export default function TreasuryPage() {
 
   useEffect(() => {
     if (selectedRate) {
-      setForm((prev) => ({
-        ...prev,
-        amount: String(selectedRate.amount),
-      }));
+      setForm((prev) => {
+        if (prev.amount === '' || prev.amount === '0') {
+          return {
+            ...prev,
+            amount: String(selectedRate.amount),
+          };
+        }
+
+        return prev;
+      });
       return;
     }
 
@@ -158,9 +215,45 @@ export default function TreasuryPage() {
     }
   }, [selectedMember, selectedRate]);
 
+  useEffect(() => {
+    if (!form.memberId) {
+      setMemberStatement(null);
+      return;
+    }
+
+    api
+      .get<MemberAccountStatement>(`/members/${form.memberId}/account-statement`)
+      .then(setMemberStatement)
+      .catch(() => setMemberStatement(null));
+  }, [form.memberId, payments]);
+
+  const duplicateMonthPayment = useMemo(() => {
+    if (!form.memberId || !form.period) return null;
+
+    const [year, month] = form.period.split('-').map(Number);
+
+    return (
+      payments.find(
+        (payment) =>
+          payment.member?.id === form.memberId &&
+          payment.status === 'REGISTERED' &&
+          payment.periodYear === year &&
+          payment.periodMonth === month,
+      ) ?? null
+    );
+  }, [form.memberId, form.period, payments]);
+
   async function handlePayment(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+
+    if (duplicateMonthPayment) {
+      setError(
+        `El mes ${String(duplicateMonthPayment.periodMonth).padStart(2, '0')}/${duplicateMonthPayment.periodYear} ya fue cargado para este socio.`,
+      );
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -184,6 +277,7 @@ export default function TreasuryPage() {
         methodCode: 'EFECTIVO',
         notes: '',
       });
+      setMemberStatement(null);
 
       const [p, c] = await Promise.all([
         api.get<Payment[]>('/payments'),
@@ -302,7 +396,7 @@ export default function TreasuryPage() {
         <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
           <SectionCard
             title="Registrar cobro de cuota"
-            description="El monto se completa automáticamente según la categoría del socio."
+            description="El monto se carga automáticamente según la categoría del socio, pero puede ajustarse manualmente para beneficios excepcionales."
           >
             <form onSubmit={handlePayment} className="grid gap-4 md:grid-cols-2">
               <div className="md:col-span-2">
@@ -326,6 +420,58 @@ export default function TreasuryPage() {
                 </select>
               </div>
 
+              {memberStatement && (
+                <div className="md:col-span-2 space-y-3 rounded-2xl border border-ink/10 bg-ink/5 p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-ink">
+                      Situación del socio:
+                    </span>
+                    <span
+                      className={`rounded-xl border px-2 py-1 text-xs font-semibold ${debtBadgeClasses(
+                        memberStatement.summary.debtColor,
+                      )}`}
+                    >
+                      {memberStatement.summary.debtLevelLabel}
+                    </span>
+                  </div>
+
+                  <div className="text-sm text-ink/70">
+                    {memberStatement.summary.monthsOwed === 0 ? (
+                      'No registra meses adeudados.'
+                    ) : (
+                      <>
+                        Meses que adeuda:{' '}
+                        <span className="font-medium text-ink">
+                          {memberStatement.summary.months
+                            .map((month) => month.label)
+                            .join(', ')}
+                        </span>
+                      </>
+                    )}
+                  </div>
+
+                  {memberStatement.summary.monthsOwed > 0 && (
+                    <div className="text-sm text-ink/70">
+                      Deuda estimada actual:{" "}
+                      <span className="font-medium text-ink">
+                        {fmt(memberStatement.summary.totalDebt)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {duplicateMonthPayment && (
+                <div className="md:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  Atención: el mes{' '}
+                  <span className="font-semibold">
+                    {String(duplicateMonthPayment.periodMonth).padStart(2, '0')}/
+                    {duplicateMonthPayment.periodYear}
+                  </span>{' '}
+                  ya fue cargado para este socio.
+                </div>
+              )}
+
               <div>
                 <label className="mb-2 block text-sm font-medium text-ink/80">
                   Categoría
@@ -343,10 +489,19 @@ export default function TreasuryPage() {
                 </label>
                 <input
                   type="number"
+                  min="0"
+                  step="0.01"
                   value={form.amount}
-                  readOnly
-                  className="w-full rounded-2xl border border-ink/10 bg-ink/5 px-4 py-3 text-sm"
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, amount: e.target.value }))
+                  }
+                  required
+                  className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
                 />
+                <p className="mt-2 text-xs text-ink/50">
+                  Se completa automáticamente, pero puede modificarse si existe
+                  un beneficio excepcional para ese cobro.
+                </p>
               </div>
 
               <div>
@@ -420,7 +575,7 @@ export default function TreasuryPage() {
               <div className="md:col-span-2">
                 <button
                   type="submit"
-                  disabled={saving}
+                  disabled={saving || Boolean(duplicateMonthPayment)}
                   className="rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
                 >
                   {saving ? 'Registrando...' : 'Registrar pago'}
