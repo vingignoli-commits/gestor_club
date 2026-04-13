@@ -7,6 +7,10 @@ import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMemberDto } from './dto/create-member.dto';
 import { UpdateMemberDto } from './dto/update-member.dto';
+import {
+  buildCurrentRatesMap,
+  buildDebtSnapshot,
+} from './member-debt.utils';
 
 @Injectable()
 export class MembersService {
@@ -55,6 +59,11 @@ export class MembersService {
   }
 
   async create(dto: CreateMemberDto) {
+    const joinedAt = new Date(dto.joinedAt);
+    const joinedMonthStart = new Date(
+      Date.UTC(joinedAt.getUTCFullYear(), joinedAt.getUTCMonth(), 1),
+    );
+
     try {
       return await this.prisma.member.create({
         data: {
@@ -67,7 +76,21 @@ export class MembersService {
           phone: dto.phone?.trim() || null,
           email: dto.email?.trim() || null,
           notes: dto.notes?.trim() || null,
-          joinedAt: new Date(dto.joinedAt),
+          joinedAt,
+          statusHistory: {
+            create: {
+              status: dto.status ?? 'ACTIVE',
+              effectiveFrom: joinedAt,
+              reason: 'Alta inicial',
+            },
+          },
+          categoryHistory: {
+            create: {
+              category: dto.category,
+              effectiveFrom: joinedMonthStart,
+              reason: 'Categoría inicial',
+            },
+          },
         },
       });
     } catch (error) {
@@ -91,7 +114,13 @@ export class MembersService {
           orderBy: { dueDate: 'desc' },
         },
         payments: {
-          orderBy: { paidAt: 'desc' },
+          orderBy: [{ periodYear: 'desc' }, { periodMonth: 'desc' }],
+        },
+        statusHistory: {
+          orderBy: { effectiveFrom: 'desc' },
+        },
+        categoryHistory: {
+          orderBy: { effectiveFrom: 'desc' },
         },
       },
     });
@@ -104,22 +133,67 @@ export class MembersService {
   }
 
   async update(id: string, dto: UpdateMemberDto) {
-    await this.findOne(id);
+    const member = await this.findOne(id);
+    const effectiveFrom = firstDayOfCurrentMonth();
 
     try {
-      return await this.prisma.member.update({
-        where: { id },
-        data: {
-          matricula: dto.matricula?.trim(),
-          firstName: dto.firstName?.trim(),
-          lastName: dto.lastName?.trim(),
-          category: dto.category,
-          status: dto.status,
-          grade: dto.grade === undefined ? undefined : dto.grade || null,
-          phone: dto.phone === undefined ? undefined : dto.phone.trim() || null,
-          email: dto.email === undefined ? undefined : dto.email.trim() || null,
-          notes: dto.notes === undefined ? undefined : dto.notes.trim() || null,
-        },
+      return await this.prisma.$transaction(async (tx) => {
+        if (dto.category && dto.category !== member.category) {
+          await tx.memberCategoryHistory.updateMany({
+            where: {
+              memberId: id,
+              effectiveTo: null,
+            },
+            data: {
+              effectiveTo: effectiveFrom,
+            },
+          });
+
+          await tx.memberCategoryHistory.create({
+            data: {
+              memberId: id,
+              category: dto.category,
+              effectiveFrom,
+              reason: 'Cambio de categoría',
+            },
+          });
+        }
+
+        if (dto.status && dto.status !== member.status) {
+          await tx.memberStatusHistory.updateMany({
+            where: {
+              memberId: id,
+              effectiveTo: null,
+            },
+            data: {
+              effectiveTo: effectiveFrom,
+            },
+          });
+
+          await tx.memberStatusHistory.create({
+            data: {
+              memberId: id,
+              status: dto.status,
+              effectiveFrom,
+              reason: 'Cambio de estado',
+            },
+          });
+        }
+
+        return tx.member.update({
+          where: { id },
+          data: {
+            matricula: dto.matricula?.trim(),
+            firstName: dto.firstName?.trim(),
+            lastName: dto.lastName?.trim(),
+            category: dto.category,
+            status: dto.status,
+            grade: dto.grade === undefined ? undefined : dto.grade || null,
+            phone: dto.phone === undefined ? undefined : dto.phone.trim() || null,
+            email: dto.email === undefined ? undefined : dto.email.trim() || null,
+            notes: dto.notes === undefined ? undefined : dto.notes.trim() || null,
+          },
+        });
       });
     } catch (error) {
       if (
@@ -134,56 +208,96 @@ export class MembersService {
   }
 
   async getDebtSummary() {
-    const members = await this.prisma.member.findMany({
-      include: {
-        charges: {
-          include: { billingPeriod: true },
+    const queryDate = new Date();
+
+    const [members, rates] = await Promise.all([
+      this.prisma.member.findMany({
+        include: {
+          payments: {
+            where: { status: 'REGISTERED' },
+            orderBy: [{ periodYear: 'desc' }, { periodMonth: 'desc' }],
+          },
+          statusHistory: {
+            orderBy: { effectiveFrom: 'desc' },
+          },
+          categoryHistory: {
+            orderBy: { effectiveFrom: 'desc' },
+          },
         },
-      },
-    });
+      }),
+      this.prisma.monthlyRate.findMany({
+        where: {
+          validFrom: { lte: queryDate },
+          OR: [{ validTo: null }, { validTo: { gt: queryDate } }],
+        },
+        orderBy: [{ category: 'asc' }, { validFrom: 'desc' }],
+      }),
+    ]);
+
+    const currentRates = buildCurrentRatesMap(rates, queryDate);
 
     return members
-      .map((m) => {
-        const totalCharged = m.charges.reduce((s, c) => s + Number(c.amount), 0);
-        const totalPaid = m.charges.reduce(
-          (s, c) => s + Number(c.paidAmount),
-          0,
-        );
-        const debt = totalCharged - totalPaid;
+      .map((member) => {
+        const snapshot = buildDebtSnapshot(member, currentRates, queryDate);
 
         return {
-          id: m.id,
-          matricula: m.matricula,
-          firstName: m.firstName,
-          lastName: m.lastName,
-          category: m.category,
-          status: m.status,
-          debt,
-          charges: m.charges,
+          id: member.id,
+          matricula: member.matricula,
+          firstName: member.firstName,
+          lastName: member.lastName,
+          category: member.category,
+          status: member.status,
+          phone: member.phone,
+          debt: snapshot.debt,
+          monthsOwed: snapshot.monthsOwed,
+          owesCurrentMonth: snapshot.owesCurrentMonth,
+          overdueMonthsCount: snapshot.overdueMonthsCount,
+          overdueMonthLabels: snapshot.overdueMonthLabels,
+          debtLevel: snapshot.debtLevel,
+          debtLevelLabel: snapshot.debtLevelLabel,
+          debtColor: snapshot.debtColor,
+          months: snapshot.months,
         };
       })
-      .filter((m) => m.debt > 0);
+      .filter((member) => member.debt > 0)
+      .sort((a, b) => b.debt - a.debt);
   }
 
   async getAccountStatement(id: string) {
-    const member = await this.findOne(id);
+    const queryDate = new Date();
 
-    const totalCharged = member.charges.reduce(
-      (s, c) => s + Number(c.amount),
-      0,
-    );
-    const totalPaid = member.charges.reduce(
-      (s, c) => s + Number(c.paidAmount),
-      0,
-    );
+    const [member, rates] = await Promise.all([
+      this.findOne(id),
+      this.prisma.monthlyRate.findMany({
+        where: {
+          validFrom: { lte: queryDate },
+          OR: [{ validTo: null }, { validTo: { gt: queryDate } }],
+        },
+        orderBy: [{ category: 'asc' }, { validFrom: 'desc' }],
+      }),
+    ]);
+
+    const currentRates = buildCurrentRatesMap(rates, queryDate);
+    const snapshot = buildDebtSnapshot(member, currentRates, queryDate);
 
     return {
       member,
       summary: {
-        totalCharged,
-        totalPaid,
-        balance: totalCharged - totalPaid,
+        totalDebt: snapshot.debt,
+        monthsOwed: snapshot.monthsOwed,
+        owesCurrentMonth: snapshot.owesCurrentMonth,
+        overdueMonthsCount: snapshot.overdueMonthsCount,
+        overdueMonthLabels: snapshot.overdueMonthLabels,
+        debtLevel: snapshot.debtLevel,
+        debtLevelLabel: snapshot.debtLevelLabel,
+        debtColor: snapshot.debtColor,
+        months: snapshot.months,
       },
     };
   }
+}
+
+function firstDayOfCurrentMonth(): Date {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 }
