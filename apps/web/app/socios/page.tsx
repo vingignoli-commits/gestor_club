@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { SectionCard } from '../../components/section-card';
 import { api } from '../../lib/api';
 
@@ -29,6 +29,30 @@ type MemberForm = {
   email: string;
   notes: string;
   joinedAt: string;
+};
+
+type SortField =
+  | 'matricula'
+  | 'firstName'
+  | 'lastName'
+  | 'category'
+  | 'status'
+  | 'grade'
+  | 'phone'
+  | 'email'
+  | 'joinedAt';
+
+type SortDirection = 'asc' | 'desc';
+
+type Filters = {
+  matricula: string;
+  firstName: string;
+  lastName: string;
+  category: string;
+  status: string;
+  grade: string;
+  phone: string;
+  email: string;
 };
 
 const CATEGORY_OPTIONS = [
@@ -66,6 +90,19 @@ function emptyForm(): MemberForm {
   };
 }
 
+function emptyFilters(): Filters {
+  return {
+    matricula: '',
+    firstName: '',
+    lastName: '',
+    category: '',
+    status: '',
+    grade: '',
+    phone: '',
+    email: '',
+  };
+}
+
 function categoryLabel(value: string) {
   return CATEGORY_OPTIONS.find((option) => option.value === value)?.label ?? value;
 }
@@ -90,9 +127,17 @@ function buildWhatsappLink(member: Member) {
   return `https://wa.me/${celular}?text=${encodeURIComponent(texto)}`;
 }
 
+function normalizeText(value: string | null | undefined) {
+  return (value ?? '').trim().toLowerCase();
+}
+
+function compareValues(a: string, b: string, direction: SortDirection) {
+  const result = a.localeCompare(b, 'es', { numeric: true, sensitivity: 'base' });
+  return direction === 'asc' ? result : -result;
+}
+
 export default function MembersPage() {
   const [members, setMembers] = useState<Member[]>([]);
-  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
   const [showForm, setShowForm] = useState(false);
@@ -102,24 +147,26 @@ export default function MembersPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  const [filters, setFilters] = useState<Filters>(emptyFilters());
+  const [sortField, setSortField] = useState<SortField>('lastName');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+
   const isEditing = useMemo(() => editingMemberId !== null, [editingMemberId]);
 
-  function load(q?: string) {
+  async function load() {
     setLoading(true);
-    api
-      .get<Member[]>(`/members${q ? `?search=${encodeURIComponent(q)}` : ''}`)
-      .then(setMembers)
-      .finally(() => setLoading(false));
+
+    try {
+      const data = await api.get<Member[]>('/members');
+      setMembers(data);
+    } finally {
+      setLoading(false);
+    }
   }
 
-  useEffect(() => {
+  useMemo(() => {
     load();
   }, []);
-
-  function handleSearch(e: React.FormEvent) {
-    e.preventDefault();
-    load(search);
-  }
 
   function openCreate() {
     setEditingMemberId(null);
@@ -151,6 +198,27 @@ export default function MembersPage() {
     setEditingMemberId(null);
     setForm(emptyForm());
     setError('');
+  }
+
+  function toggleSort(field: SortField) {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+
+    setSortField(field);
+    setSortDirection('asc');
+  }
+
+  function setFilter<K extends keyof Filters>(key: K, value: Filters[K]) {
+    setFilters((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  }
+
+  function clearFilters() {
+    setFilters(emptyFilters());
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -187,7 +255,7 @@ export default function MembersPage() {
       }
 
       closeForm();
-      load(search);
+      await load();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error al guardar socio');
     } finally {
@@ -195,14 +263,112 @@ export default function MembersPage() {
     }
   }
 
+  const filteredMembers = useMemo(() => {
+    const result = members.filter((member) => {
+      if (
+        filters.matricula &&
+        !normalizeText(member.matricula).includes(normalizeText(filters.matricula))
+      ) {
+        return false;
+      }
+
+      if (
+        filters.firstName &&
+        !normalizeText(member.firstName).includes(normalizeText(filters.firstName))
+      ) {
+        return false;
+      }
+
+      if (
+        filters.lastName &&
+        !normalizeText(member.lastName).includes(normalizeText(filters.lastName))
+      ) {
+        return false;
+      }
+
+      if (filters.category && member.category !== filters.category) {
+        return false;
+      }
+
+      if (filters.status && member.status !== filters.status) {
+        return false;
+      }
+
+      if (filters.grade && (member.grade ?? '') !== filters.grade) {
+        return false;
+      }
+
+      if (
+        filters.phone &&
+        !normalizeText(member.phone).includes(normalizeText(filters.phone))
+      ) {
+        return false;
+      }
+
+      if (
+        filters.email &&
+        !normalizeText(member.email).includes(normalizeText(filters.email))
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+
+    return result.sort((a, b) => {
+      switch (sortField) {
+        case 'matricula':
+          return compareValues(a.matricula, b.matricula, sortDirection);
+        case 'firstName':
+          return compareValues(a.firstName, b.firstName, sortDirection);
+        case 'lastName':
+          return compareValues(a.lastName, b.lastName, sortDirection);
+        case 'category':
+          return compareValues(categoryLabel(a.category), categoryLabel(b.category), sortDirection);
+        case 'status':
+          return compareValues(statusLabel(a.status), statusLabel(b.status), sortDirection);
+        case 'grade':
+          return compareValues(gradeLabel(a.grade), gradeLabel(b.grade), sortDirection);
+        case 'phone':
+          return compareValues(a.phone ?? '', b.phone ?? '', sortDirection);
+        case 'email':
+          return compareValues(a.email ?? '', b.email ?? '', sortDirection);
+        case 'joinedAt':
+          return compareValues(a.joinedAt, b.joinedAt, sortDirection);
+        default:
+          return 0;
+      }
+    });
+  }, [members, filters, sortField, sortDirection]);
+
+  const activeFilters = useMemo(() => {
+    const items: string[] = [];
+
+    if (filters.matricula) items.push(`Matrícula: ${filters.matricula}`);
+    if (filters.firstName) items.push(`Nombre: ${filters.firstName}`);
+    if (filters.lastName) items.push(`Apellido: ${filters.lastName}`);
+    if (filters.category) items.push(`Categoría: ${categoryLabel(filters.category)}`);
+    if (filters.status) items.push(`Estado: ${statusLabel(filters.status)}`);
+    if (filters.grade) items.push(`Grado: ${gradeLabel(filters.grade)}`);
+    if (filters.phone) items.push(`Celular: ${filters.phone}`);
+    if (filters.email) items.push(`Email: ${filters.email}`);
+
+    return items;
+  }, [filters]);
+
   const activos = members.filter((m) => m.status === 'ACTIVE').length;
   const inactivos = members.filter((m) => m.status === 'INACTIVE').length;
+
+  function sortIndicator(field: SortField) {
+    if (sortField !== field) return '↕';
+    return sortDirection === 'asc' ? '↑' : '↓';
+  }
 
   return (
     <div className="space-y-6">
       <SectionCard
         title="Socios"
-        description="Alta, edición y consulta del padrón de socios."
+        description="Alta, edición, filtrado y orden del padrón de socios."
       >
         <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
@@ -218,29 +384,12 @@ export default function MembersPage() {
             <div className="mt-2 text-2xl font-bold text-ink">{inactivos}</div>
           </div>
           <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
-            <div className="text-xs uppercase tracking-wide text-ink/50">Grados válidos</div>
-            <div className="mt-2 text-sm font-semibold text-ink">
-              Aprendiz · Compañero · Maestro
-            </div>
+            <div className="text-xs uppercase tracking-wide text-ink/50">Mostrando</div>
+            <div className="mt-2 text-2xl font-bold text-ink">{filteredMembers.length}</div>
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <form onSubmit={handleSearch} className="flex w-full gap-3 md:max-w-xl">
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por apellido, nombre, matrícula, email o teléfono"
-              className="flex-1 rounded-2xl border border-ink/10 px-4 py-3 text-sm"
-            />
-            <button
-              type="submit"
-              className="rounded-2xl border border-ink/10 px-5 py-3 text-sm font-semibold"
-            >
-              Buscar
-            </button>
-          </form>
-
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-end">
           <button
             type="button"
             onClick={openCreate}
@@ -250,27 +399,185 @@ export default function MembersPage() {
           </button>
         </div>
 
+        {activeFilters.length > 0 && (
+          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <span className="font-semibold">Filtros aplicados:</span>{' '}
+            {activeFilters.join(' · ')}
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="ml-3 font-semibold underline underline-offset-4"
+            >
+              Limpiar filtros
+            </button>
+          </div>
+        )}
+
         {loading ? (
           <div className="py-8 text-sm text-ink/60">Cargando socios...</div>
-        ) : members.length === 0 ? (
-          <div className="py-8 text-sm text-ink/60">No se encontraron socios.</div>
+        ) : filteredMembers.length === 0 ? (
+          <div className="py-8 text-sm text-ink/60">
+            No se encontraron socios con los filtros actuales.
+          </div>
         ) : (
           <div className="mt-6 overflow-x-auto">
             <table className="min-w-full border-separate border-spacing-y-2">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-ink/50">
-                  <th className="px-3 py-2">Matrícula</th>
-                  <th className="px-3 py-2">Socio</th>
-                  <th className="px-3 py-2">Categoría</th>
-                  <th className="px-3 py-2">Grado</th>
-                  <th className="px-3 py-2">Celular</th>
-                  <th className="px-3 py-2">Email</th>
-                  <th className="px-3 py-2">Estado</th>
+                  <th className="px-3 py-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort('matricula')}
+                      className="font-semibold"
+                    >
+                      Matrícula {sortIndicator('matricula')}
+                    </button>
+                  </th>
+                  <th className="px-3 py-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort('lastName')}
+                      className="font-semibold"
+                    >
+                      Socio {sortIndicator('lastName')}
+                    </button>
+                  </th>
+                  <th className="px-3 py-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort('category')}
+                      className="font-semibold"
+                    >
+                      Categoría {sortIndicator('category')}
+                    </button>
+                  </th>
+                  <th className="px-3 py-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort('grade')}
+                      className="font-semibold"
+                    >
+                      Grado {sortIndicator('grade')}
+                    </button>
+                  </th>
+                  <th className="px-3 py-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort('phone')}
+                      className="font-semibold"
+                    >
+                      Celular {sortIndicator('phone')}
+                    </button>
+                  </th>
+                  <th className="px-3 py-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort('email')}
+                      className="font-semibold"
+                    >
+                      Email {sortIndicator('email')}
+                    </button>
+                  </th>
+                  <th className="px-3 py-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort('status')}
+                      className="font-semibold"
+                    >
+                      Estado {sortIndicator('status')}
+                    </button>
+                  </th>
                   <th className="px-3 py-2">Acciones</th>
+                </tr>
+
+                <tr className="text-left text-xs text-ink/60">
+                  <th className="px-3 py-2">
+                    <input
+                      value={filters.matricula}
+                      onChange={(e) => setFilter('matricula', e.target.value)}
+                      placeholder="Filtrar"
+                      className="w-full rounded-xl border border-ink/10 px-3 py-2 text-xs"
+                    />
+                  </th>
+                  <th className="px-3 py-2">
+                    <div className="grid gap-2">
+                      <input
+                        value={filters.lastName}
+                        onChange={(e) => setFilter('lastName', e.target.value)}
+                        placeholder="Apellido"
+                        className="w-full rounded-xl border border-ink/10 px-3 py-2 text-xs"
+                      />
+                      <input
+                        value={filters.firstName}
+                        onChange={(e) => setFilter('firstName', e.target.value)}
+                        placeholder="Nombre"
+                        className="w-full rounded-xl border border-ink/10 px-3 py-2 text-xs"
+                      />
+                    </div>
+                  </th>
+                  <th className="px-3 py-2">
+                    <select
+                      value={filters.category}
+                      onChange={(e) => setFilter('category', e.target.value)}
+                      className="w-full rounded-xl border border-ink/10 px-3 py-2 text-xs"
+                    >
+                      <option value="">Todas</option>
+                      {CATEGORY_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </th>
+                  <th className="px-3 py-2">
+                    <select
+                      value={filters.grade}
+                      onChange={(e) => setFilter('grade', e.target.value)}
+                      className="w-full rounded-xl border border-ink/10 px-3 py-2 text-xs"
+                    >
+                      <option value="">Todos</option>
+                      {GRADE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </th>
+                  <th className="px-3 py-2">
+                    <input
+                      value={filters.phone}
+                      onChange={(e) => setFilter('phone', e.target.value)}
+                      placeholder="Filtrar"
+                      className="w-full rounded-xl border border-ink/10 px-3 py-2 text-xs"
+                    />
+                  </th>
+                  <th className="px-3 py-2">
+                    <input
+                      value={filters.email}
+                      onChange={(e) => setFilter('email', e.target.value)}
+                      placeholder="Filtrar"
+                      className="w-full rounded-xl border border-ink/10 px-3 py-2 text-xs"
+                    />
+                  </th>
+                  <th className="px-3 py-2">
+                    <select
+                      value={filters.status}
+                      onChange={(e) => setFilter('status', e.target.value)}
+                      className="w-full rounded-xl border border-ink/10 px-3 py-2 text-xs"
+                    >
+                      <option value="">Todos</option>
+                      {STATUS_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </th>
+                  <th className="px-3 py-2" />
                 </tr>
               </thead>
               <tbody>
-                {members.map((m) => {
+                {filteredMembers.map((m) => {
                   const whatsappLink = buildWhatsappLink(m);
 
                   return (
@@ -299,9 +606,7 @@ export default function MembersPage() {
                         )}
                       </td>
                       <td className="px-3 py-3 text-ink/80">{m.email ?? '-'}</td>
-                      <td className="px-3 py-3 text-ink/80">
-                        {statusLabel(m.status)}
-                      </td>
+                      <td className="px-3 py-3 text-ink/80">{statusLabel(m.status)}</td>
                       <td className="rounded-r-2xl px-3 py-3">
                         <button
                           type="button"
