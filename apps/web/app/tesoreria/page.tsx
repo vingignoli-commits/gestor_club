@@ -6,6 +6,7 @@ import { api } from '../../lib/api';
 
 type Payment = {
   id: string;
+  memberId: string;
   amount: number;
   paidAt: string;
   methodCode: string;
@@ -235,7 +236,7 @@ export default function TreasuryPage() {
     return (
       payments.find(
         (payment) =>
-          payment.member?.id === form.memberId &&
+          payment.memberId === form.memberId &&
           payment.status === 'REGISTERED' &&
           payment.periodYear === year &&
           payment.periodMonth === month,
@@ -452,7 +453,7 @@ export default function TreasuryPage() {
 
                   {memberStatement.summary.monthsOwed > 0 && (
                     <div className="text-sm text-ink/70">
-                      Deuda estimada actual:{" "}
+                      Deuda estimada actual:{' '}
                       <span className="font-medium text-ink">
                         {fmt(memberStatement.summary.totalDebt)}
                       </span>
