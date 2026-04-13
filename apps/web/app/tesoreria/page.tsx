@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { SectionCard } from '../../components/section-card';
 import { api } from '../../lib/api';
 
@@ -10,10 +10,30 @@ type Payment = {
   paidAt: string;
   methodCode: string;
   status: string;
-  member: { firstName: string; lastName: string; matricula: string };
+  periodYear: number;
+  periodMonth: number;
+  member: {
+    firstName: string;
+    lastName: string;
+    matricula: string;
+    category: string;
+  };
 };
 
-type Member = { id: string; firstName: string; lastName: string; matricula: string };
+type Member = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  matricula: string;
+  category: string;
+};
+
+type MonthlyRate = {
+  category: string;
+  amount: number;
+  validFrom: string | null;
+  validTo: string | null;
+};
 
 type CashTransaction = {
   id: string;
@@ -27,51 +47,154 @@ type CashTransaction = {
 };
 
 function fmt(n: number) {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n);
+  return new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    maximumFractionDigits: 0,
+  }).format(n);
+}
+
+function monthInputDefault() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
 export default function TreasuryPage() {
   const [tab, setTab] = useState<'pagos' | 'caja'>('pagos');
   const [payments, setPayments] = useState<Payment[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
-  const [cashData, setCashData] = useState<{ totalIn: number; totalOut: number; balance: number; transactions: CashTransaction[] } | null>(null);
+  const [rates, setRates] = useState<MonthlyRate[]>([]);
+  const [cashData, setCashData] = useState<{
+    totalIn: number;
+    totalOut: number;
+    balance: number;
+    transactions: CashTransaction[];
+  } | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingCash, setSavingCash] = useState(false);
+  const [savingRate, setSavingRate] = useState<string | null>(null);
+
   const [error, setError] = useState('');
   const [errorCash, setErrorCash] = useState('');
-  const [form, setForm] = useState({ memberId: '', amount: '', paidAt: new Date().toISOString().split('T')[0], methodCode: 'EFECTIVO', notes: '' });
-  const [cashForm, setCashForm] = useState({ direction: 'IN', amount: '', description: '', occurredAt: new Date().toISOString().split('T')[0], incomeType: 'OTHER', expenseType: 'OTHER', receiptNote: '', methodCode: 'EFECTIVO' });
+  const [errorRate, setErrorRate] = useState('');
 
-  useEffect(() => {
-    Promise.all([
+  const [form, setForm] = useState({
+    memberId: '',
+    amount: '',
+    paidAt: new Date().toISOString().split('T')[0],
+    period: monthInputDefault(),
+    methodCode: 'EFECTIVO',
+    notes: '',
+  });
+
+  const [cashForm, setCashForm] = useState({
+    direction: 'IN',
+    amount: '',
+    description: '',
+    occurredAt: new Date().toISOString().split('T')[0],
+    incomeType: 'OTHER',
+    expenseType: 'OTHER',
+    receiptNote: '',
+    methodCode: 'EFECTIVO',
+  });
+
+  const [rateDrafts, setRateDrafts] = useState<Record<string, string>>({});
+
+  async function loadAll() {
+    const [p, m, c, r] = await Promise.all([
       api.get<Payment[]>('/payments'),
       api.get<Member[]>('/members'),
-      api.get<{ totalIn: number; totalOut: number; balance: number; transactions: CashTransaction[] }>('/reports/cash-summary'),
-    ]).then(([p, m, c]) => {
-      setPayments(p);
-      setMembers(m);
-      setCashData(c);
-    }).finally(() => setLoading(false));
+      api.get<{
+        totalIn: number;
+        totalOut: number;
+        balance: number;
+        transactions: CashTransaction[];
+      }>('/reports/cash-summary'),
+      api.get<MonthlyRate[]>('/monthly-rates'),
+    ]);
+
+    setPayments(p);
+    setMembers(m);
+    setCashData(c);
+    setRates(r);
+
+    const nextDrafts: Record<string, string> = {};
+    for (const rate of r) {
+      nextDrafts[rate.category] = String(rate.amount);
+    }
+    setRateDrafts(nextDrafts);
+  }
+
+  useEffect(() => {
+    loadAll().finally(() => setLoading(false));
   }, []);
+
+  const selectedMember = useMemo(
+    () => members.find((m) => m.id === form.memberId) ?? null,
+    [members, form.memberId],
+  );
+
+  const selectedRate = useMemo(() => {
+    if (!selectedMember) return null;
+    return rates.find((r) => r.category === selectedMember.category) ?? null;
+  }, [rates, selectedMember]);
+
+  useEffect(() => {
+    if (selectedRate) {
+      setForm((prev) => ({
+        ...prev,
+        amount: String(selectedRate.amount),
+      }));
+      return;
+    }
+
+    if (selectedMember) {
+      setForm((prev) => ({
+        ...prev,
+        amount: '',
+      }));
+    }
+  }, [selectedMember, selectedRate]);
 
   async function handlePayment(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     setSaving(true);
+
     try {
+      const [year, month] = form.period.split('-').map(Number);
+
       await api.post('/payments', {
         memberId: form.memberId,
         amount: Number(form.amount),
         paidAt: form.paidAt,
+        periodYear: year,
+        periodMonth: month,
         methodCode: form.methodCode,
-        notes: form.notes,
+        notes: form.notes || undefined,
       });
-      setForm({ memberId: '', amount: '', paidAt: new Date().toISOString().split('T')[0], methodCode: 'EFECTIVO', notes: '' });
+
+      setForm({
+        memberId: '',
+        amount: '',
+        paidAt: new Date().toISOString().split('T')[0],
+        period: monthInputDefault(),
+        methodCode: 'EFECTIVO',
+        notes: '',
+      });
+
       const [p, c] = await Promise.all([
         api.get<Payment[]>('/payments'),
-        api.get<{ totalIn: number; totalOut: number; balance: number; transactions: CashTransaction[] }>('/reports/cash-summary'),
+        api.get<{
+          totalIn: number;
+          totalOut: number;
+          balance: number;
+          transactions: CashTransaction[];
+        }>('/reports/cash-summary'),
       ]);
+
       setPayments(p);
       setCashData(c);
     } catch (err: unknown) {
@@ -85,6 +208,7 @@ export default function TreasuryPage() {
     e.preventDefault();
     setErrorCash('');
     setSavingCash(true);
+
     try {
       await api.post('/cash', {
         direction: cashForm.direction,
@@ -92,28 +216,82 @@ export default function TreasuryPage() {
         description: cashForm.description,
         occurredAt: cashForm.occurredAt,
         methodCode: cashForm.methodCode,
-        incomeType: cashForm.direction === 'IN' ? cashForm.incomeType : undefined,
-        expenseType: cashForm.direction === 'OUT' ? cashForm.expenseType : undefined,
+        incomeType:
+          cashForm.direction === 'IN' ? cashForm.incomeType : undefined,
+        expenseType:
+          cashForm.direction === 'OUT' ? cashForm.expenseType : undefined,
         receiptNote: cashForm.receiptNote || undefined,
       });
-      setCashForm({ direction: 'IN', amount: '', description: '', occurredAt: new Date().toISOString().split('T')[0], incomeType: 'OTHER', expenseType: 'OTHER', receiptNote: '', methodCode: 'EFECTIVO' });
-      const c = await api.get<{ totalIn: number; totalOut: number; balance: number; transactions: CashTransaction[] }>('/reports/cash-summary');
+
+      setCashForm({
+        direction: 'IN',
+        amount: '',
+        description: '',
+        occurredAt: new Date().toISOString().split('T')[0],
+        incomeType: 'OTHER',
+        expenseType: 'OTHER',
+        receiptNote: '',
+        methodCode: 'EFECTIVO',
+      });
+
+      const c = await api.get<{
+        totalIn: number;
+        totalOut: number;
+        balance: number;
+        transactions: CashTransaction[];
+      }>('/reports/cash-summary');
+
       setCashData(c);
     } catch (err: unknown) {
-      setErrorCash(err instanceof Error ? err.message : 'Error al registrar movimiento');
+      setErrorCash(
+        err instanceof Error ? err.message : 'Error al registrar movimiento',
+      );
     } finally {
       setSavingCash(false);
+    }
+  }
+
+  async function handleRateSave(category: string) {
+    setErrorRate('');
+    setSavingRate(category);
+
+    try {
+      await api.put('/monthly-rates', {
+        category,
+        amount: Number(rateDrafts[category] || 0),
+        validFrom: new Date().toISOString(),
+      });
+
+      const updatedRates = await api.get<MonthlyRate[]>('/monthly-rates');
+      setRates(updatedRates);
+
+      const nextDrafts: Record<string, string> = {};
+      for (const rate of updatedRates) {
+        nextDrafts[rate.category] = String(rate.amount);
+      }
+      setRateDrafts(nextDrafts);
+    } catch (err: unknown) {
+      setErrorRate(
+        err instanceof Error ? err.message : 'Error al actualizar tarifa',
+      );
+    } finally {
+      setSavingRate(null);
     }
   }
 
   return (
     <div className="space-y-6">
       <div className="flex gap-3">
-        {(['pagos', 'caja'] as const).map(t => (
+        {(['pagos', 'caja'] as const).map((t) => (
           <button
             key={t}
+            type="button"
             onClick={() => setTab(t)}
-            className={`rounded-2xl px-5 py-3 text-sm font-semibold capitalize transition ${tab === t ? 'bg-accent text-white' : 'bg-ink/10 text-ink/70 hover:bg-ink/20'}`}
+            className={`rounded-2xl px-5 py-3 text-sm font-semibold capitalize transition ${
+              tab === t
+                ? 'bg-accent text-white'
+                : 'bg-ink/10 text-ink/70 hover:bg-ink/20'
+            }`}
           >
             {t === 'pagos' ? 'Cobro de cuotas' : 'Control de caja'}
           </button>
@@ -121,44 +299,218 @@ export default function TreasuryPage() {
       </div>
 
       {tab === 'pagos' && (
-        <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-          <SectionCard title="Registrar pago de cuota" description="Selecciona el socio y registra el pago.">
-            <form onSubmit={handlePayment} className="space-y-3">
-              <select className="w-full rounded-2xl border border-ink/10 px-4 py-3" value={form.memberId} onChange={e => setForm(f => ({ ...f, memberId: e.target.value }))} required>
-                <option value="">Seleccionar socio</option>
-                {members.map(m => (
-                  <option key={m.id} value={m.id}>{m.matricula} — {m.lastName}, {m.firstName}</option>
-                ))}
-              </select>
-              <div className="grid gap-3 md:grid-cols-2">
-                <input className="rounded-2xl border border-ink/10 px-4 py-3" placeholder="Importe" type="number" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} required />
-                <input className="rounded-2xl border border-ink/10 px-4 py-3" type="date" value={form.paidAt} onChange={e => setForm(f => ({ ...f, paidAt: e.target.value }))} required />
-                <select className="rounded-2xl border border-ink/10 px-4 py-3" value={form.methodCode} onChange={e => setForm(f => ({ ...f, methodCode: e.target.value }))}>
+        <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+          <SectionCard
+            title="Registrar cobro de cuota"
+            description="El monto se completa automáticamente según la categoría del socio."
+          >
+            <form onSubmit={handlePayment} className="grid gap-4 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-sm font-medium text-ink/80">
+                  Socio
+                </label>
+                <select
+                  value={form.memberId}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, memberId: e.target.value }))
+                  }
+                  required
+                  className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                >
+                  <option value="">Seleccionar socio</option>
+                  {members.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.matricula} — {m.lastName}, {m.firstName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-ink/80">
+                  Categoría
+                </label>
+                <input
+                  value={selectedMember?.category ?? ''}
+                  readOnly
+                  className="w-full rounded-2xl border border-ink/10 bg-ink/5 px-4 py-3 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-ink/80">
+                  Monto
+                </label>
+                <input
+                  type="number"
+                  value={form.amount}
+                  readOnly
+                  className="w-full rounded-2xl border border-ink/10 bg-ink/5 px-4 py-3 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-ink/80">
+                  Fecha de cobro
+                </label>
+                <input
+                  type="date"
+                  value={form.paidAt}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, paidAt: e.target.value }))
+                  }
+                  required
+                  className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-ink/80">
+                  Mes al que corresponde
+                </label>
+                <input
+                  type="month"
+                  value={form.period}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, period: e.target.value }))
+                  }
+                  required
+                  className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-ink/80">
+                  Forma de pago
+                </label>
+                <select
+                  value={form.methodCode}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, methodCode: e.target.value }))
+                  }
+                  className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                >
                   <option value="EFECTIVO">Efectivo</option>
                   <option value="TRANSFERENCIA">Transferencia</option>
-                  <option value="DEBITO">Debito</option>
-                  <option value="CREDITO">Credito</option>
+                  <option value="DEBITO">Débito</option>
+                  <option value="CREDITO">Crédito</option>
                 </select>
-                <input className="rounded-2xl border border-ink/10 px-4 py-3" placeholder="Notas (opcional)" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
               </div>
-              {error && <p className="rounded-2xl bg-warn/10 px-4 py-3 text-sm text-warn">{error}</p>}
-              <button type="submit" disabled={saving} className="w-full rounded-2xl bg-accent px-5 py-3 font-semibold text-white disabled:opacity-60">
-                {saving ? 'Registrando...' : 'Registrar pago'}
-              </button>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-ink/80">
+                  Nota
+                </label>
+                <input
+                  value={form.notes}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, notes: e.target.value }))
+                  }
+                  className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                  placeholder="Observaciones"
+                />
+              </div>
+
+              {error && (
+                <div className="md:col-span-2 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {error}
+                </div>
+              )}
+
+              <div className="md:col-span-2">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
+                >
+                  {saving ? 'Registrando...' : 'Registrar pago'}
+                </button>
+              </div>
             </form>
           </SectionCard>
 
-          <SectionCard title="Ultimos pagos" description="Historial de cobros de cuotas.">
-            {loading ? <p className="text-sm text-ink/50">Cargando...</p> : (
-              <div className="space-y-2 max-h-80 overflow-y-auto">
-                {payments.length === 0 && <p className="text-sm text-ink/50">Sin pagos registrados.</p>}
-                {payments.map(p => (
-                  <div key={p.id} className="rounded-2xl border border-ink/10 bg-white p-3">
-                    <div className="flex justify-between">
-                      <p className="font-medium text-sm">{p.member?.lastName}, {p.member?.firstName}</p>
-                      <p className="font-semibold text-accent text-sm">{fmt(Number(p.amount))}</p>
+          <SectionCard
+            title="Valores por categoría"
+            description="Cada actualización genera una nueva vigencia histórica."
+          >
+            <div className="space-y-4">
+              {rates.map((rate) => (
+                <div
+                  key={rate.category}
+                  className="grid gap-3 rounded-2xl border border-ink/10 p-4 md:grid-cols-[1fr_1fr_auto]"
+                >
+                  <div>
+                    <div className="text-sm font-semibold text-ink">
+                      {rate.category}
                     </div>
-                    <p className="text-xs text-ink/50">{new Date(p.paidAt).toLocaleDateString('es-AR')} — {p.methodCode}</p>
+                    <div className="text-xs text-ink/60">
+                      Vigente desde{' '}
+                      {rate.validFrom
+                        ? new Date(rate.validFrom).toLocaleDateString('es-AR')
+                        : '-'}
+                    </div>
+                  </div>
+
+                  <input
+                    type="number"
+                    value={rateDrafts[rate.category] ?? ''}
+                    onChange={(e) =>
+                      setRateDrafts((prev) => ({
+                        ...prev,
+                        [rate.category]: e.target.value,
+                      }))
+                    }
+                    className="rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => handleRateSave(rate.category)}
+                    disabled={savingRate === rate.category}
+                    className="rounded-2xl bg-ink px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
+                  >
+                    {savingRate === rate.category ? 'Guardando...' : 'Guardar'}
+                  </button>
+                </div>
+              ))}
+
+              {errorRate && (
+                <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {errorRate}
+                </div>
+              )}
+            </div>
+          </SectionCard>
+
+          <SectionCard
+            title="Pagos registrados"
+            description="Historial reciente de cobros."
+            className="xl:col-span-2"
+          >
+            {loading ? (
+              <div className="py-8 text-sm text-ink/60">Cargando...</div>
+            ) : payments.length === 0 ? (
+              <div className="py-8 text-sm text-ink/60">
+                Sin pagos registrados.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {payments.map((p) => (
+                  <div
+                    key={p.id}
+                    className="rounded-2xl border border-ink/10 px-4 py-3"
+                  >
+                    <div className="font-semibold text-ink">
+                      {p.member?.lastName}, {p.member?.firstName}
+                    </div>
+                    <div className="text-sm text-ink/70">
+                      {fmt(Number(p.amount))} —{' '}
+                      {String(p.periodMonth).padStart(2, '0')}/{p.periodYear}
+                    </div>
+                    <div className="text-xs text-ink/50">
+                      {new Date(p.paidAt).toLocaleDateString('es-AR')} —{' '}
+                      {p.methodCode}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -168,66 +520,145 @@ export default function TreasuryPage() {
       )}
 
       {tab === 'caja' && (
-        <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-          <SectionCard title="Registrar movimiento de caja" description="Ingresos y egresos de la tesoreria.">
-            <form onSubmit={handleCash} className="space-y-3">
-              <div className="grid gap-3 md:grid-cols-2">
-                <select className="rounded-2xl border border-ink/10 px-4 py-3" value={cashForm.direction} onChange={e => setCashForm(f => ({ ...f, direction: e.target.value }))}>
-                  <option value="IN">Ingreso</option>
-                  <option value="OUT">Egreso</option>
-                </select>
-                <input className="rounded-2xl border border-ink/10 px-4 py-3" placeholder="Importe" type="number" value={cashForm.amount} onChange={e => setCashForm(f => ({ ...f, amount: e.target.value }))} required />
-                <input className="rounded-2xl border border-ink/10 px-4 py-3" type="date" value={cashForm.occurredAt} onChange={e => setCashForm(f => ({ ...f, occurredAt: e.target.value }))} required />
-                <select className="rounded-2xl border border-ink/10 px-4 py-3" value={cashForm.methodCode} onChange={e => setCashForm(f => ({ ...f, methodCode: e.target.value }))}>
-                  <option value="EFECTIVO">Efectivo</option>
-                  <option value="TRANSFERENCIA">Transferencia</option>
-                </select>
-                {cashForm.direction === 'IN' ? (
-                  <select className="rounded-2xl border border-ink/10 px-4 py-3" value={cashForm.incomeType} onChange={e => setCashForm(f => ({ ...f, incomeType: e.target.value }))}>
-                    <option value="MEMBERSHIP">Cuota</option>
-                    <option value="SALE">Venta</option>
-                    <option value="DONATION">Donacion</option>
-                    <option value="TRAINING">Capacitacion</option>
-                    <option value="OTHER">Otro</option>
-                  </select>
-                ) : (
-                  <select className="rounded-2xl border border-ink/10 px-4 py-3" value={cashForm.expenseType} onChange={e => setCashForm(f => ({ ...f, expenseType: e.target.value }))}>
-                    <option value="SUPPLIES">Insumos</option>
-                    <option value="SERVICES">Servicios</option>
-                    <option value="SALARY">Salario</option>
-                    <option value="MAINTENANCE">Mantenimiento</option>
-                    <option value="OTHER">Otro</option>
-                  </select>
-                )}
-              </div>
-              <input className="w-full rounded-2xl border border-ink/10 px-4 py-3" placeholder="Descripcion *" value={cashForm.description} onChange={e => setCashForm(f => ({ ...f, description: e.target.value }))} required />
-              <input className="w-full rounded-2xl border border-ink/10 px-4 py-3" placeholder="Nota de comprobante (opcional)" value={cashForm.receiptNote} onChange={e => setCashForm(f => ({ ...f, receiptNote: e.target.value }))} />
-              {errorCash && <p className="rounded-2xl bg-warn/10 px-4 py-3 text-sm text-warn">{errorCash}</p>}
-              <button type="submit" disabled={savingCash} className="w-full rounded-2xl bg-accent px-5 py-3 font-semibold text-white disabled:opacity-60">
-                {savingCash ? 'Registrando...' : 'Registrar movimiento'}
-              </button>
-            </form>
-          </SectionCard>
+        <SectionCard
+          title="Control de caja"
+          description="Registro manual de otros ingresos y egresos."
+        >
+          <form onSubmit={handleCash} className="grid gap-4 md:grid-cols-2">
+            <select
+              value={cashForm.direction}
+              onChange={(e) =>
+                setCashForm((f) => ({ ...f, direction: e.target.value }))
+              }
+              className="rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+            >
+              <option value="IN">Ingreso</option>
+              <option value="OUT">Egreso</option>
+            </select>
 
-          <SectionCard title="Resumen de caja" description="Balance actual de la tesoreria.">
-            {loading || !cashData ? <p className="text-sm text-ink/50">Cargando...</p> : (
-              <div className="space-y-3">
-                <div className="rounded-2xl bg-accent/10 p-4">
-                  <p className="text-xs text-ink/50 uppercase tracking-wider">Total ingresos</p>
-                  <p className="mt-1 text-2xl font-semibold text-accent">{fmt(cashData.totalIn)}</p>
-                </div>
-                <div className="rounded-2xl bg-warn/10 p-4">
-                  <p className="text-xs text-ink/50 uppercase tracking-wider">Total egresos</p>
-                  <p className="mt-1 text-2xl font-semibold text-warn">{fmt(cashData.totalOut)}</p>
-                </div>
-                <div className="rounded-2xl bg-ink/5 p-4">
-                  <p className="text-xs text-ink/50 uppercase tracking-wider">Balance</p>
-                  <p className={`mt-1 text-2xl font-semibold ${cashData.balance >= 0 ? 'text-accent' : 'text-warn'}`}>{fmt(cashData.balance)}</p>
-                </div>
+            <input
+              type="number"
+              value={cashForm.amount}
+              onChange={(e) =>
+                setCashForm((f) => ({ ...f, amount: e.target.value }))
+              }
+              required
+              placeholder="Monto"
+              className="rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+            />
+
+            <input
+              type="date"
+              value={cashForm.occurredAt}
+              onChange={(e) =>
+                setCashForm((f) => ({ ...f, occurredAt: e.target.value }))
+              }
+              required
+              className="rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+            />
+
+            <select
+              value={cashForm.methodCode}
+              onChange={(e) =>
+                setCashForm((f) => ({ ...f, methodCode: e.target.value }))
+              }
+              className="rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+            >
+              <option value="EFECTIVO">Efectivo</option>
+              <option value="TRANSFERENCIA">Transferencia</option>
+            </select>
+
+            {cashForm.direction === 'IN' ? (
+              <select
+                value={cashForm.incomeType}
+                onChange={(e) =>
+                  setCashForm((f) => ({ ...f, incomeType: e.target.value }))
+                }
+                className="rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+              >
+                <option value="MEMBERSHIP">Cuota</option>
+                <option value="SALE">Venta</option>
+                <option value="DONATION">Donación</option>
+                <option value="TRAINING">Capacitación</option>
+                <option value="OTHER">Otro</option>
+              </select>
+            ) : (
+              <select
+                value={cashForm.expenseType}
+                onChange={(e) =>
+                  setCashForm((f) => ({ ...f, expenseType: e.target.value }))
+                }
+                className="rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+              >
+                <option value="SUPPLIES">Insumos</option>
+                <option value="SERVICES">Servicios</option>
+                <option value="SALARY">Salario</option>
+                <option value="MAINTENANCE">Mantenimiento</option>
+                <option value="OTHER">Otro</option>
+              </select>
+            )}
+
+            <input
+              value={cashForm.description}
+              onChange={(e) =>
+                setCashForm((f) => ({ ...f, description: e.target.value }))
+              }
+              required
+              placeholder="Descripción"
+              className="rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+            />
+
+            <input
+              value={cashForm.receiptNote}
+              onChange={(e) =>
+                setCashForm((f) => ({ ...f, receiptNote: e.target.value }))
+              }
+              placeholder="Comprobante / nota"
+              className="rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+            />
+
+            {errorCash && (
+              <div className="md:col-span-2 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">
+                {errorCash}
               </div>
             )}
-          </SectionCard>
-        </div>
+
+            <div className="md:col-span-2">
+              <button
+                type="submit"
+                disabled={savingCash}
+                className="rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {savingCash ? 'Registrando...' : 'Registrar movimiento'}
+              </button>
+            </div>
+          </form>
+
+          {loading || !cashData ? (
+            <div className="mt-6 text-sm text-ink/60">Cargando...</div>
+          ) : (
+            <div className="mt-6 grid gap-4 md:grid-cols-3">
+              <div className="rounded-2xl border border-ink/10 p-4">
+                <div className="text-xs text-ink/60">Total ingresos</div>
+                <div className="text-xl font-bold">{fmt(cashData.totalIn)}</div>
+              </div>
+              <div className="rounded-2xl border border-ink/10 p-4">
+                <div className="text-xs text-ink/60">Total egresos</div>
+                <div className="text-xl font-bold">{fmt(cashData.totalOut)}</div>
+              </div>
+              <div className="rounded-2xl border border-ink/10 p-4">
+                <div className="text-xs text-ink/60">Balance</div>
+                <div
+                  className={`text-xl font-bold ${
+                    cashData.balance >= 0 ? 'text-accent' : 'text-warn'
+                  }`}
+                >
+                  {fmt(cashData.balance)}
+                </div>
+              </div>
+            </div>
+          )}
+        </SectionCard>
       )}
     </div>
   );
