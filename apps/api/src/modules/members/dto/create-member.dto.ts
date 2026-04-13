@@ -5,9 +5,22 @@ import {
   IsOptional,
   IsString,
 } from 'class-validator';
-import { MemberCategory, MemberStatus } from '@prisma/client';
 
-export enum MemberGrade {
+export enum MemberCategoryEnum {
+  SIMPLE = 'SIMPLE',
+  DOBLE = 'DOBLE',
+  ESTUDIANTE = 'ESTUDIANTE',
+  SOCIAL = 'SOCIAL',
+  MENOR = 'MENOR',
+  HONOR = 'HONOR',
+}
+
+export enum MemberStatusEnum {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+}
+
+export enum MemberGradeEnum {
   APRENDIZ = 'APRENDIZ',
   COMPANERO = 'COMPANERO',
   MAESTRO = 'MAESTRO',
@@ -23,16 +36,16 @@ export class CreateMemberDto {
   @IsString()
   lastName!: string;
 
-  @IsEnum(MemberCategory)
-  category!: MemberCategory;
+  @IsEnum(MemberCategoryEnum)
+  category!: MemberCategoryEnum;
 
   @IsOptional()
-  @IsEnum(MemberStatus)
-  status?: MemberStatus;
+  @IsEnum(MemberStatusEnum)
+  status?: MemberStatusEnum;
 
   @IsOptional()
-  @IsEnum(MemberGrade)
-  grade?: MemberGrade;
+  @IsEnum(MemberGradeEnum)
+  grade?: MemberGradeEnum;
 
   @IsOptional()
   @IsString()
