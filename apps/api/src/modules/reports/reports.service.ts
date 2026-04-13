@@ -1,53 +1,87 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  buildCurrentRatesMap,
+  buildDebtSnapshot,
+} from '../members/member-debt.utils';
 
 @Injectable()
 export class ReportsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getDebtors() {
-    const members = await this.prisma.member.findMany({
-      include: {
-        charges: { include: { billingPeriod: true } },
-      },
-    });
+    const queryDate = new Date();
+
+    const [members, rates] = await Promise.all([
+      this.prisma.member.findMany({
+        include: {
+          payments: {
+            where: { status: 'REGISTERED' },
+            orderBy: [{ periodYear: 'desc' }, { periodMonth: 'desc' }],
+          },
+          statusHistory: {
+            orderBy: { effectiveFrom: 'desc' },
+          },
+          categoryHistory: {
+            orderBy: { effectiveFrom: 'desc' },
+          },
+        },
+      }),
+      this.prisma.monthlyRate.findMany({
+        where: {
+          validFrom: { lte: queryDate },
+          OR: [{ validTo: null }, { validTo: { gt: queryDate } }],
+        },
+        orderBy: [{ category: 'asc' }, { validFrom: 'desc' }],
+      }),
+    ]);
+
+    const currentRates = buildCurrentRatesMap(rates, queryDate);
 
     return members
-      .map((m) => {
-        const totalCharged = m.charges.reduce((s, c) => s + Number(c.amount), 0);
-        const totalPaid = m.charges.reduce((s, c) => s + Number(c.paidAmount), 0);
-        const debt = totalCharged - totalPaid;
+      .map((member) => {
+        const snapshot = buildDebtSnapshot(member, currentRates, queryDate);
+
         return {
-          id: m.id,
-          matricula: m.matricula,
-          firstName: m.firstName,
-          lastName: m.lastName,
-          category: m.category,
-          status: m.status,
-          phone: m.phone,
-          debt,
-          periodsOwed: m.charges.filter(
-            (c) => Number(c.paidAmount) < Number(c.amount)
-          ).length,
+          id: member.id,
+          matricula: member.matricula,
+          firstName: member.firstName,
+          lastName: member.lastName,
+          category: member.category,
+          status: member.status,
+          phone: member.phone,
+          debt: snapshot.debt,
+          monthsOwed: snapshot.monthsOwed,
+          owesCurrentMonth: snapshot.owesCurrentMonth,
+          overdueMonthsCount: snapshot.overdueMonthsCount,
+          overdueMonthLabels: snapshot.overdueMonthLabels,
+          debtLevel: snapshot.debtLevel,
+          debtLevelLabel: snapshot.debtLevelLabel,
+          debtColor: snapshot.debtColor,
+          months: snapshot.months,
         };
       })
-      .filter((m) => m.debt > 0)
+      .filter((member) => member.debt > 0)
       .sort((a, b) => b.debt - a.debt);
   }
 
   async getMonthlyCollection() {
     const payments = await this.prisma.payment.findMany({
       where: { status: 'REGISTERED' },
-      orderBy: { paidAt: 'asc' },
+      orderBy: [{ periodYear: 'asc' }, { periodMonth: 'asc' }],
     });
 
     const grouped: Record<string, number> = {};
-    for (const p of payments) {
-      const key = `${p.paidAt.getFullYear()}-${String(p.paidAt.getMonth() + 1).padStart(2, '0')}`;
-      grouped[key] = (grouped[key] ?? 0) + Number(p.amount);
+
+    for (const payment of payments) {
+      const key = `${payment.periodYear}-${String(payment.periodMonth).padStart(2, '0')}`;
+      grouped[key] = (grouped[key] ?? 0) + Number(payment.amount);
     }
 
-    return Object.entries(grouped).map(([month, total]) => ({ month, total }));
+    return Object.entries(grouped).map(([month, total]) => ({
+      month,
+      total,
+    }));
   }
 
   async getCashSummary() {
@@ -56,12 +90,12 @@ export class ReportsService {
     });
 
     const totalIn = transactions
-      .filter((t) => t.direction === 'IN')
-      .reduce((s, t) => s + Number(t.amount), 0);
+      .filter((transaction) => transaction.direction === 'IN')
+      .reduce((sum, transaction) => sum + Number(transaction.amount), 0);
 
     const totalOut = transactions
-      .filter((t) => t.direction === 'OUT')
-      .reduce((s, t) => s + Number(t.amount), 0);
+      .filter((transaction) => transaction.direction === 'OUT')
+      .reduce((sum, transaction) => sum + Number(transaction.amount), 0);
 
     return {
       totalIn,
@@ -79,15 +113,23 @@ export class ReportsService {
       },
     });
 
-    const grouped: Record<string, { active: number; inactive: number }> = {};
-    for (const m of members) {
-      if (!grouped[m.category]) {
-        grouped[m.category] = { active: 0, inactive: 0 };
+    const grouped: Record<
+      string,
+      { active: number; inactive: number }
+    > = {};
+
+    for (const member of members) {
+      if (!grouped[member.category]) {
+        grouped[member.category] = {
+          active: 0,
+          inactive: 0,
+        };
       }
-      if (m.status === 'ACTIVE') {
-        grouped[m.category].active++;
+
+      if (member.status === 'ACTIVE') {
+        grouped[member.category].active += 1;
       } else {
-        grouped[m.category].inactive++;
+        grouped[member.category].inactive += 1;
       }
     }
 
