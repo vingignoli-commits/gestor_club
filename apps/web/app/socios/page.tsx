@@ -147,24 +147,32 @@ export default function MembersPage() {
     setError('');
     setSaving(true);
 
-    const payload = {
-      matricula: form.matricula.trim(),
-      firstName: form.firstName.trim(),
-      lastName: form.lastName.trim(),
-      category: form.category,
-      status: form.status,
-      grade: form.grade,
-      phone: form.phone.trim() || undefined,
-      email: form.email.trim() || undefined,
-      notes: form.notes.trim() || undefined,
-      joinedAt: form.joinedAt,
-    };
-
     try {
       if (isEditing && editingMemberId) {
-        await api.patch(`/members/${editingMemberId}`, payload);
+        await api.patch(`/members/${editingMemberId}`, {
+          matricula: form.matricula.trim(),
+          firstName: form.firstName.trim(),
+          lastName: form.lastName.trim(),
+          category: form.category,
+          status: form.status,
+          grade: form.grade,
+          phone: form.phone.trim() || undefined,
+          email: form.email.trim() || undefined,
+          notes: form.notes.trim() || undefined,
+        });
       } else {
-        await api.post('/members', payload);
+        await api.post('/members', {
+          matricula: form.matricula.trim(),
+          firstName: form.firstName.trim(),
+          lastName: form.lastName.trim(),
+          category: form.category,
+          status: form.status,
+          grade: form.grade,
+          phone: form.phone.trim() || undefined,
+          email: form.email.trim() || undefined,
+          notes: form.notes.trim() || undefined,
+          joinedAt: new Date(form.joinedAt).toISOString(),
+        });
       }
 
       closeForm();
@@ -176,12 +184,36 @@ export default function MembersPage() {
     }
   }
 
+  const activos = members.filter((m) => m.status === 'ACTIVE').length;
+  const inactivos = members.filter((m) => m.status === 'INACTIVE').length;
+
   return (
     <div className="space-y-6">
       <SectionCard
         title="Socios"
         description="Alta, edición y consulta del padrón de socios."
       >
+        <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
+            <div className="text-xs uppercase tracking-wide text-ink/50">Total</div>
+            <div className="mt-2 text-2xl font-bold text-ink">{members.length}</div>
+          </div>
+          <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
+            <div className="text-xs uppercase tracking-wide text-ink/50">Activos</div>
+            <div className="mt-2 text-2xl font-bold text-ink">{activos}</div>
+          </div>
+          <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
+            <div className="text-xs uppercase tracking-wide text-ink/50">Inactivos</div>
+            <div className="mt-2 text-2xl font-bold text-ink">{inactivos}</div>
+          </div>
+          <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
+            <div className="text-xs uppercase tracking-wide text-ink/50">Grados válidos</div>
+            <div className="mt-2 text-sm font-semibold text-ink">
+              Aprendiz · Compañero · Maestro
+            </div>
+          </div>
+        </div>
+
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <form onSubmit={handleSearch} className="flex w-full gap-3 md:max-w-xl">
             <input
@@ -219,37 +251,33 @@ export default function MembersPage() {
                   <th className="px-3 py-2">Matrícula</th>
                   <th className="px-3 py-2">Socio</th>
                   <th className="px-3 py-2">Categoría</th>
-                  <th className="px-3 py-2">Estado</th>
                   <th className="px-3 py-2">Grado</th>
-                  <th className="px-3 py-2">Teléfono</th>
+                  <th className="px-3 py-2">Celular</th>
                   <th className="px-3 py-2">Email</th>
+                  <th className="px-3 py-2">Estado</th>
                   <th className="px-3 py-2">Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {members.map((member) => (
-                  <tr key={member.id} className="rounded-2xl bg-ink/5 text-sm">
+                {members.map((m) => (
+                  <tr key={m.id} className="rounded-2xl bg-ink/5 text-sm">
                     <td className="rounded-l-2xl px-3 py-3 font-semibold text-ink">
-                      {member.matricula}
+                      {m.matricula}
                     </td>
                     <td className="px-3 py-3 text-ink">
-                      {member.lastName}, {member.firstName}
+                      {m.lastName}, {m.firstName}
                     </td>
+                    <td className="px-3 py-3 text-ink/80">{categoryLabel(m.category)}</td>
+                    <td className="px-3 py-3 text-ink/80">{gradeLabel(m.grade)}</td>
+                    <td className="px-3 py-3 text-ink/80">{m.phone ?? '-'}</td>
+                    <td className="px-3 py-3 text-ink/80">{m.email ?? '-'}</td>
                     <td className="px-3 py-3 text-ink/80">
-                      {categoryLabel(member.category)}
+                      {statusLabel(m.status)}
                     </td>
-                    <td className="px-3 py-3 text-ink/80">
-                      {statusLabel(member.status)}
-                    </td>
-                    <td className="px-3 py-3 text-ink/80">
-                      {gradeLabel(member.grade)}
-                    </td>
-                    <td className="px-3 py-3 text-ink/80">{member.phone ?? '-'}</td>
-                    <td className="px-3 py-3 text-ink/80">{member.email ?? '-'}</td>
                     <td className="rounded-r-2xl px-3 py-3">
                       <button
                         type="button"
-                        onClick={() => openEdit(member)}
+                        onClick={() => openEdit(m)}
                         className="rounded-xl border border-ink/10 px-3 py-2 text-xs font-semibold"
                       >
                         Editar
@@ -444,7 +472,7 @@ export default function MembersPage() {
                 disabled={saving}
                 className="flex-1 rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
               >
-                {saving ? 'Guardando...' : isEditing ? 'Guardar cambios' : 'Crear socio'}
+                {saving ? 'Guardando...' : isEditing ? 'Guardar cambios' : 'Guardar'}
               </button>
             </div>
           </form>
