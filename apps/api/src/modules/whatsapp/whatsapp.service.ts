@@ -107,40 +107,40 @@ export class WhatsappService {
 
     const currentRates = this.buildCurrentRatesMap(rates, queryDate);
 
-    const recipients: CampaignRecipient[] = members
-      .map((member) => {
-        const phone = this.normalizePhone(member.phone);
-        if (!phone) return null;
+    const recipients: CampaignRecipient[] = [];
 
-        const snapshot = this.buildDebtSnapshot(member, currentRates, queryDate);
-        if (!snapshot.owesCurrentMonth) return null;
+    for (const member of members) {
+      const phone = this.normalizePhone(member.phone);
+      if (!phone) continue;
 
-        const message = this.buildCurrentMonthDebtMessage(
-          member.firstName,
-          member.grade,
-          snapshot.currentMonthLabel,
-          snapshot.overdueMonthLabels,
-        );
+      const snapshot = this.buildDebtSnapshot(member, currentRates, queryDate);
+      if (!snapshot.owesCurrentMonth) continue;
 
-        return {
-          memberId: member.id,
-          matricula: member.matricula,
-          firstName: member.firstName,
-          lastName: member.lastName,
-          grade: member.grade,
-          destination: phone,
-          message,
-          waUrl: `https://wa.me/${phone}?text=${encodeURIComponent(message)}`,
-          debt: {
-            totalDebt: snapshot.debt,
-            monthsOwed: snapshot.monthsOwed,
-            owesCurrentMonth: snapshot.owesCurrentMonth,
-            overdueMonthLabels: snapshot.overdueMonthLabels,
-            months: snapshot.months,
-          },
-        };
-      })
-      .filter((item): item is CampaignRecipient => item !== null);
+      const message = this.buildCurrentMonthDebtMessage(
+        member.firstName,
+        member.grade,
+        snapshot.currentMonthLabel,
+        snapshot.overdueMonthLabels,
+      );
+
+      recipients.push({
+        memberId: member.id,
+        matricula: member.matricula,
+        firstName: member.firstName,
+        lastName: member.lastName,
+        grade: member.grade,
+        destination: phone,
+        message,
+        waUrl: `https://wa.me/${phone}?text=${encodeURIComponent(message)}`,
+        debt: {
+          totalDebt: snapshot.debt,
+          monthsOwed: snapshot.monthsOwed,
+          owesCurrentMonth: snapshot.owesCurrentMonth,
+          overdueMonthLabels: snapshot.overdueMonthLabels,
+          months: snapshot.months,
+        },
+      });
+    }
 
     return {
       campaignCode: 'current-month-dues',
