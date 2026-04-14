@@ -15,8 +15,31 @@ export class WhatsappController {
     return this.whatsappService.getDispatches();
   }
 
+  @Get('campaigns/current-month-dues')
+  getCurrentMonthDuesCampaign() {
+    return this.whatsappService.getCurrentMonthDuesCampaign();
+  }
+
+  @Post('campaigns/current-month-dues')
+  createCurrentMonthDuesCampaign() {
+    return this.whatsappService.createCurrentMonthDuesCampaign();
+  }
+
   @Post('send')
-  send(@Body() body: { memberId: string; templateId: string; destination: string }) {
-    return this.whatsappService.sendMessage(body.memberId, body.templateId, body.destination);
+  send(
+    @Body()
+    body: {
+      memberId: string;
+      templateId?: string;
+      destination: string;
+      message?: string;
+    },
+  ) {
+    return this.whatsappService.sendMessage(
+      body.memberId,
+      body.destination,
+      body.message,
+      body.templateId,
+    );
   }
 }
