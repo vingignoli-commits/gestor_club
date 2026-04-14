@@ -206,21 +206,26 @@ model WhatsappTemplate {
 }
 
 model MessageDispatch {
-  id           String            @id @default(cuid())
-  memberId     String?
-  templateId   String?
-  destination  String
-  renderedBody String
-  status       MessageStatus     @default(PENDING)
-  scheduledAt  DateTime?
-  sentAt       DateTime?
-  errorMessage String?
-  createdAt    DateTime          @default(now())
+  id            String            @id @default(cuid())
+  memberId      String?
+  templateId    String?
+  destination   String
+  renderedBody  String
+  status        MessageStatus     @default(PENDING)
+  campaignCode  String?
+  campaignYear  Int?
+  campaignMonth Int?
+  scheduledAt   DateTime?
+  sentAt        DateTime?
+  errorMessage  String?
+  createdAt     DateTime          @default(now())
 
   member   Member?           @relation(fields: [memberId], references: [id])
   template WhatsappTemplate? @relation(fields: [templateId], references: [id])
 
   @@index([status, scheduledAt])
+  @@index([campaignCode, campaignYear, campaignMonth])
+  @@index([memberId, campaignCode, campaignYear, campaignMonth])
 }
 
 model AuditLog {
