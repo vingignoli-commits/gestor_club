@@ -1,40 +1,291 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import { SectionCard } from '../../components/section-card';
+import { api } from '../../lib/api';
+
+type CampaignRecipient = {
+  memberId: string;
+  matricula: string;
+  firstName: string;
+  lastName: string;
+  grade: string | null;
+  destination: string;
+  message: string;
+  waUrl: string;
+  debt: {
+    totalDebt: number;
+    monthsOwed: number;
+    owesCurrentMonth: boolean;
+    overdueMonthLabels: string[];
+    months: Array<{
+      label: string;
+      category: string;
+      amount: number;
+      overdue: boolean;
+      isCurrentMonth: boolean;
+    }>;
+  };
+};
+
+type CampaignPreview = {
+  campaignCode: string;
+  generatedAt: string;
+  currentMonthLabel: string;
+  recipientsCount: number;
+  recipients: CampaignRecipient[];
+};
+
+type Dispatch = {
+  id: string;
+  destination: string;
+  renderedBody: string;
+  status: string;
+  createdAt: string;
+  member?: {
+    firstName: string;
+    lastName: string;
+    matricula: string;
+  } | null;
+};
+
+function fmt(n: number) {
+  return new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    maximumFractionDigits: 0,
+  }).format(n);
+}
 
 export default function MessagingPage() {
+  const [campaign, setCampaign] = useState<CampaignPreview | null>(null);
+  const [dispatches, setDispatches] = useState<Dispatch[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [creatingCampaign, setCreatingCampaign] = useState(false);
+  const [error, setError] = useState('');
+
+  async function loadAll() {
+    const [campaignData, dispatchesData] = await Promise.all([
+      api.get<CampaignPreview>('/whatsapp/campaigns/current-month-dues'),
+      api.get<Dispatch[]>('/whatsapp/dispatches'),
+    ]);
+
+    setCampaign(campaignData);
+    setDispatches(dispatchesData);
+  }
+
+  useEffect(() => {
+    loadAll()
+      .catch((err: unknown) => {
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'No se pudo cargar la mensajería',
+        );
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function handleCreateCampaign() {
+    setCreatingCampaign(true);
+    setError('');
+
+    try {
+      await api.post('/whatsapp/campaigns/current-month-dues', {});
+      await loadAll();
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'No se pudo generar la campaña',
+      );
+    } finally {
+      setCreatingCampaign(false);
+    }
+  }
+
   return (
-    <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+    <div className="space-y-6">
       <SectionCard
-        title="Campanas de WhatsApp"
-        description="Segmentacion por deuda, estado, categoria y condiciones historicas."
+        title="Campaña de aviso de cuota del mes en curso"
+        description="Se incluyen solo los socios que todavía deben el mes actual. Si además registran meses anteriores impagos, esos meses también se informan en el mensaje."
       >
-        <div className="space-y-3">
-          <select className="w-full rounded-2xl border border-ink/10 px-4 py-3">
-            <option>Morosos del mes</option>
-          </select>
-          <select className="w-full rounded-2xl border border-ink/10 px-4 py-3">
-            <option>Plantilla: Recordatorio de mora</option>
-          </select>
-          <textarea
-            className="min-h-40 w-full rounded-2xl border border-ink/10 px-4 py-3"
-            defaultValue="Hola {{nombre}}, te contactamos por tu saldo pendiente con el club."
-          />
-          <button className="rounded-2xl bg-accent px-5 py-3 font-semibold text-white">
-            Programar campana
-          </button>
-        </div>
+        {loading ? (
+          <div className="py-8 text-sm text-ink/60">Cargando campaña...</div>
+        ) : campaign ? (
+          <div className="space-y-6">
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
+                <div className="text-xs uppercase tracking-wide text-ink/50">
+                  Mes de campaña
+                </div>
+                <div className="mt-2 text-xl font-bold text-ink">
+                  {campaign.currentMonthLabel}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
+                <div className="text-xs uppercase tracking-wide text-ink/50">
+                  Destinatarios
+                </div>
+                <div className="mt-2 text-xl font-bold text-ink">
+                  {campaign.recipientsCount}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
+                <div className="text-xs uppercase tracking-wide text-ink/50">
+                  Generada
+                </div>
+                <div className="mt-2 text-sm font-semibold text-ink">
+                  {new Date(campaign.generatedAt).toLocaleString('es-AR')}
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-ink/10 bg-slate-50 p-4 text-sm text-ink/70">
+              La campaña avisa automáticamente la cuota del mes en curso y agrega
+              el detalle de los meses vencidos anteriores si existen.
+            </div>
+
+            {error && (
+              <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={handleCreateCampaign}
+                disabled={creatingCampaign || campaign.recipientsCount === 0}
+                className="rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {creatingCampaign ? 'Generando...' : 'Registrar campaña'}
+              </button>
+            </div>
+
+            {campaign.recipientsCount === 0 ? (
+              <div className="py-8 text-sm text-ink/60">
+                No hay socios pendientes del mes actual para esta campaña.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {campaign.recipients.map((recipient) => (
+                  <div
+                    key={recipient.memberId}
+                    className="rounded-2xl border border-ink/10 p-4"
+                  >
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="space-y-2">
+                        <div className="text-lg font-semibold text-ink">
+                          {recipient.lastName}, {recipient.firstName}
+                        </div>
+
+                        <div className="text-sm text-ink/70">
+                          Matrícula:{' '}
+                          <span className="font-medium text-ink">
+                            {recipient.matricula}
+                          </span>
+                        </div>
+
+                        <div className="text-sm text-ink/70">
+                          Celular:{' '}
+                          <span className="font-medium text-ink">
+                            {recipient.destination}
+                          </span>
+                        </div>
+
+                        <div className="text-sm text-ink/70">
+                          Meses adeudados:{' '}
+                          <span className="font-medium text-ink">
+                            {recipient.debt.months.map((month) => month.label).join(', ')}
+                          </span>
+                        </div>
+
+                        <div className="text-sm text-ink/70">
+                          Deuda estimada actual:{' '}
+                          <span className="font-medium text-ink">
+                            {fmt(recipient.debt.totalDebt)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <a
+                        href={recipient.waUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700"
+                      >
+                        Abrir WhatsApp
+                      </a>
+                    </div>
+
+                    <div className="mt-4 rounded-2xl bg-ink/5 p-4">
+                      <div className="mb-2 text-xs uppercase tracking-wide text-ink/50">
+                        Mensaje
+                      </div>
+                      <div className="whitespace-pre-wrap text-sm text-ink">
+                        {recipient.message}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="py-8 text-sm text-ink/60">
+            No se pudo cargar la campaña.
+          </div>
+        )}
       </SectionCard>
 
       <SectionCard
-        title="Historial de envios"
-        description="Trazabilidad de mensajes, usuario emisor y estado del proveedor."
+        title="Historial de envíos"
+        description="Trazabilidad de campañas y mensajes generados."
       >
-        <div className="space-y-3 text-sm">
-          <div className="rounded-2xl bg-white p-4 shadow-card">09/04 10:32 · 182 destinatarios · Pendiente</div>
-          <div className="rounded-2xl bg-white p-4 shadow-card">08/04 17:10 · 1 destinatario · Enviado</div>
-          <div className="rounded-2xl bg-white p-4 shadow-card">07/04 09:20 · 46 destinatarios · Error parcial</div>
-        </div>
+        {loading ? (
+          <div className="py-8 text-sm text-ink/60">Cargando historial...</div>
+        ) : dispatches.length === 0 ? (
+          <div className="py-8 text-sm text-ink/60">
+            No hay envíos registrados todavía.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {dispatches.map((dispatch) => (
+              <div
+                key={dispatch.id}
+                className="rounded-2xl border border-ink/10 bg-white p-4"
+              >
+                <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="space-y-1">
+                    <div className="font-semibold text-ink">
+                      {dispatch.member
+                        ? `${dispatch.member.lastName}, ${dispatch.member.firstName}`
+                        : dispatch.destination}
+                    </div>
+                    <div className="text-sm text-ink/70">
+                      {dispatch.destination}
+                    </div>
+                    <div className="text-xs text-ink/50">
+                      {new Date(dispatch.createdAt).toLocaleString('es-AR')}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-ink/10 px-3 py-2 text-xs font-semibold text-ink/70">
+                    {dispatch.status}
+                  </div>
+                </div>
+
+                <div className="mt-3 whitespace-pre-wrap rounded-2xl bg-ink/5 p-3 text-sm text-ink">
+                  {dispatch.renderedBody}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </SectionCard>
     </div>
   );
 }
-
