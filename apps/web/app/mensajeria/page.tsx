@@ -13,11 +13,13 @@ type CampaignRecipient = {
   destination: string;
   message: string;
   waUrl: string;
+  reminderSentThisMonth: boolean;
   debt: {
     totalDebt: number;
     monthsOwed: number;
     owesCurrentMonth: boolean;
     overdueMonthLabels: string[];
+    currentMonthAmount: number;
     months: Array<{
       label: string;
       category: string;
@@ -28,12 +30,24 @@ type CampaignRecipient = {
   };
 };
 
+type CampaignSkipped = {
+  memberId: string;
+  matricula: string;
+  firstName: string;
+  lastName: string;
+  destination: string | null;
+  reasonCode: 'NO_PHONE' | 'PAID_CURRENT_MONTH_AND_NO_DEBT' | 'NO_CURRENT_MONTH_DEBT';
+  reasonLabel: string;
+};
+
 type CampaignPreview = {
   campaignCode: string;
   generatedAt: string;
   currentMonthLabel: string;
   recipientsCount: number;
+  skippedCount: number;
   recipients: CampaignRecipient[];
+  skipped: CampaignSkipped[];
 };
 
 type Dispatch = {
@@ -41,6 +55,9 @@ type Dispatch = {
   destination: string;
   renderedBody: string;
   status: string;
+  campaignCode?: string | null;
+  campaignYear?: number | null;
+  campaignMonth?: number | null;
   createdAt: string;
   member?: {
     firstName: string;
@@ -108,13 +125,13 @@ export default function MessagingPage() {
     <div className="space-y-6">
       <SectionCard
         title="Campaña de aviso de cuota del mes en curso"
-        description="Se incluyen solo los socios que todavía deben el mes actual. Si además registran meses anteriores impagos, esos meses también se informan en el mensaje."
+        description="Solo se incluye a socios que deban el mes actual. Si el socio ya pagó el mes en curso y no registra deuda, queda marcado para no enviar mensaje."
       >
         {loading ? (
           <div className="py-8 text-sm text-ink/60">Cargando campaña...</div>
         ) : campaign ? (
           <div className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-4">
               <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
                 <div className="text-xs uppercase tracking-wide text-ink/50">
                   Mes de campaña
@@ -135,6 +152,15 @@ export default function MessagingPage() {
 
               <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
                 <div className="text-xs uppercase tracking-wide text-ink/50">
+                  No enviar
+                </div>
+                <div className="mt-2 text-xl font-bold text-ink">
+                  {campaign.skippedCount}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
+                <div className="text-xs uppercase tracking-wide text-ink/50">
                   Generada
                 </div>
                 <div className="mt-2 text-sm font-semibold text-ink">
@@ -144,8 +170,9 @@ export default function MessagingPage() {
             </div>
 
             <div className="rounded-2xl border border-ink/10 bg-slate-50 p-4 text-sm text-ink/70">
-              La campaña avisa automáticamente la cuota del mes en curso y agrega
-              el detalle de los meses vencidos anteriores si existen.
+              El mensaje incluye el valor de la cuota del mes actual, el alias
+              <span className="font-semibold text-ink"> tesoreria.p100</span> y,
+              si corresponde, los meses vencidos anteriores.
             </div>
 
             {error && (
@@ -158,16 +185,20 @@ export default function MessagingPage() {
               <button
                 type="button"
                 onClick={handleCreateCampaign}
-                disabled={creatingCampaign || campaign.recipientsCount === 0}
+                disabled={
+                  creatingCampaign ||
+                  campaign.recipients.filter((recipient) => !recipient.reminderSentThisMonth)
+                    .length === 0
+                }
                 className="rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
               >
                 {creatingCampaign ? 'Generando...' : 'Registrar campaña'}
               </button>
             </div>
 
-            {campaign.recipientsCount === 0 ? (
-              <div className="py-8 text-sm text-ink/60">
-                No hay socios pendientes del mes actual para esta campaña.
+            {campaign.recipients.length === 0 ? (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-800">
+                No corresponde enviar mensajes: no hay socios que deban el mes en curso.
               </div>
             ) : (
               <div className="space-y-4">
@@ -178,8 +209,15 @@ export default function MessagingPage() {
                   >
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div className="space-y-2">
-                        <div className="text-lg font-semibold text-ink">
-                          {recipient.lastName}, {recipient.firstName}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="text-lg font-semibold text-ink">
+                            {recipient.lastName}, {recipient.firstName}
+                          </div>
+                          {recipient.reminderSentThisMonth && (
+                            <span className="rounded-xl border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
+                              Recordatorio enviado este mes
+                            </span>
+                          )}
                         </div>
 
                         <div className="text-sm text-ink/70">
@@ -193,6 +231,13 @@ export default function MessagingPage() {
                           Celular:{' '}
                           <span className="font-medium text-ink">
                             {recipient.destination}
+                          </span>
+                        </div>
+
+                        <div className="text-sm text-ink/70">
+                          Cuota del mes actual:{' '}
+                          <span className="font-medium text-ink">
+                            {fmt(recipient.debt.currentMonthAmount)}
                           </span>
                         </div>
 
@@ -233,6 +278,36 @@ export default function MessagingPage() {
                 ))}
               </div>
             )}
+
+            {campaign.skipped.length > 0 && (
+              <SectionCard
+                title="Socios excluidos de la campaña"
+                description="Listado de socios a los que no corresponde enviar mensaje en esta corrida."
+                className="mt-2"
+              >
+                <div className="space-y-3">
+                  {campaign.skipped.map((item) => (
+                    <div
+                      key={item.memberId}
+                      className="rounded-2xl border border-ink/10 bg-white p-4"
+                    >
+                      <div className="font-semibold text-ink">
+                        {item.lastName}, {item.firstName}
+                      </div>
+                      <div className="text-sm text-ink/70">
+                        Matrícula: {item.matricula}
+                      </div>
+                      <div className="text-sm text-ink/70">
+                        Celular: {item.destination ?? '-'}
+                      </div>
+                      <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                        {item.reasonLabel}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </SectionCard>
+            )}
           </div>
         ) : (
           <div className="py-8 text-sm text-ink/60">
@@ -271,6 +346,12 @@ export default function MessagingPage() {
                     <div className="text-xs text-ink/50">
                       {new Date(dispatch.createdAt).toLocaleString('es-AR')}
                     </div>
+                    {dispatch.campaignCode && (
+                      <div className="text-xs text-ink/50">
+                        Campaña: {dispatch.campaignCode} {dispatch.campaignMonth}/
+                        {dispatch.campaignYear}
+                      </div>
+                    )}
                   </div>
 
                   <div className="rounded-xl border border-ink/10 px-3 py-2 text-xs font-semibold text-ink/70">
