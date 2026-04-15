@@ -1,4 +1,10 @@
-import { IsEmail, IsEnum, IsOptional, IsString } from 'class-validator';
+import {
+  IsDateString,
+  IsEmail,
+  IsEnum,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import {
   MemberCategoryEnum,
   MemberGradeEnum,
@@ -41,4 +47,8 @@ export class UpdateMemberDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsDateString()
+  birthDate?: string;
 }
