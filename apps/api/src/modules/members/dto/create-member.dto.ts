@@ -61,4 +61,8 @@ export class CreateMemberDto {
 
   @IsDateString()
   joinedAt!: string;
+
+  @IsOptional()
+  @IsDateString()
+  birthDate?: string;
 }
