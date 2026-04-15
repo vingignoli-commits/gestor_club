@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { SectionCard } from '../../components/section-card';
 import { api } from '../../lib/api';
 
@@ -16,6 +16,7 @@ type Member = {
   email: string | null;
   notes: string | null;
   joinedAt: string;
+  birthDate: string | null;
 };
 
 type MemberForm = {
@@ -29,6 +30,7 @@ type MemberForm = {
   email: string;
   notes: string;
   joinedAt: string;
+  birthDate: string;
 };
 
 type SortField =
@@ -40,7 +42,8 @@ type SortField =
   | 'grade'
   | 'phone'
   | 'email'
-  | 'joinedAt';
+  | 'joinedAt'
+  | 'birthDate';
 
 type SortDirection = 'asc' | 'desc';
 
@@ -87,6 +90,7 @@ function emptyForm(): MemberForm {
     email: '',
     notes: '',
     joinedAt: new Date().toISOString().split('T')[0],
+    birthDate: '',
   };
 }
 
@@ -164,7 +168,7 @@ export default function MembersPage() {
     }
   }
 
-  useMemo(() => {
+  useEffect(() => {
     load();
   }, []);
 
@@ -188,6 +192,7 @@ export default function MembersPage() {
       email: member.email ?? '',
       notes: member.notes ?? '',
       joinedAt: member.joinedAt.split('T')[0],
+      birthDate: member.birthDate ? member.birthDate.split('T')[0] : '',
     });
     setError('');
     setShowForm(true);
@@ -238,6 +243,9 @@ export default function MembersPage() {
           phone: form.phone.trim() || undefined,
           email: form.email.trim() || undefined,
           notes: form.notes.trim() || undefined,
+          birthDate: form.birthDate
+            ? new Date(form.birthDate).toISOString()
+            : undefined,
         });
       } else {
         await api.post('/members', {
@@ -251,13 +259,16 @@ export default function MembersPage() {
           email: form.email.trim() || undefined,
           notes: form.notes.trim() || undefined,
           joinedAt: new Date(form.joinedAt).toISOString(),
+          birthDate: form.birthDate
+            ? new Date(form.birthDate).toISOString()
+            : undefined,
         });
       }
 
       closeForm();
       await load();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Error al guardar socio');
+      setError(err instanceof Error ? err.message : 'Error al guardar H.·.');
     } finally {
       setSaving(false);
     }
@@ -335,6 +346,8 @@ export default function MembersPage() {
           return compareValues(a.email ?? '', b.email ?? '', sortDirection);
         case 'joinedAt':
           return compareValues(a.joinedAt, b.joinedAt, sortDirection);
+        case 'birthDate':
+          return compareValues(a.birthDate ?? '', b.birthDate ?? '', sortDirection);
         default:
           return 0;
       }
@@ -367,8 +380,8 @@ export default function MembersPage() {
   return (
     <div className="space-y-6">
       <SectionCard
-        title="Socios"
-        description="Alta, edición, filtrado y orden del padrón de socios."
+        title="HH.·."
+        description="Alta, edición, filtrado y orden del padrón de HH.·."
       >
         <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
@@ -395,7 +408,7 @@ export default function MembersPage() {
             onClick={openCreate}
             className="rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-white"
           >
-            + Nuevo socio
+            + Nuevo H.·.
           </button>
         </div>
 
@@ -414,10 +427,10 @@ export default function MembersPage() {
         )}
 
         {loading ? (
-          <div className="py-8 text-sm text-ink/60">Cargando socios...</div>
+          <div className="py-8 text-sm text-ink/60">Cargando HH.·....</div>
         ) : filteredMembers.length === 0 ? (
           <div className="py-8 text-sm text-ink/60">
-            No se encontraron socios con los filtros actuales.
+            No se encontraron HH.·. con los filtros actuales.
           </div>
         ) : (
           <div className="mt-6 overflow-x-auto">
@@ -439,7 +452,7 @@ export default function MembersPage() {
                       onClick={() => toggleSort('lastName')}
                       className="font-semibold"
                     >
-                      Socio {sortIndicator('lastName')}
+                      H.·. {sortIndicator('lastName')}
                     </button>
                   </th>
                   <th className="px-3 py-2">
@@ -485,6 +498,15 @@ export default function MembersPage() {
                       className="font-semibold"
                     >
                       Estado {sortIndicator('status')}
+                    </button>
+                  </th>
+                  <th className="px-3 py-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort('birthDate')}
+                      className="font-semibold"
+                    >
+                      Nacimiento {sortIndicator('birthDate')}
                     </button>
                   </th>
                   <th className="px-3 py-2">Acciones</th>
@@ -574,6 +596,7 @@ export default function MembersPage() {
                     </select>
                   </th>
                   <th className="px-3 py-2" />
+                  <th className="px-3 py-2" />
                 </tr>
               </thead>
               <tbody>
@@ -606,7 +629,14 @@ export default function MembersPage() {
                         )}
                       </td>
                       <td className="px-3 py-3 text-ink/80">{m.email ?? '-'}</td>
-                      <td className="px-3 py-3 text-ink/80">{statusLabel(m.status)}</td>
+                      <td className="px-3 py-3 text-ink/80">
+                        {statusLabel(m.status)}
+                      </td>
+                      <td className="px-3 py-3 text-ink/80">
+                        {m.birthDate
+                          ? new Date(m.birthDate).toLocaleDateString('es-AR')
+                          : '-'}
+                      </td>
                       <td className="rounded-r-2xl px-3 py-3">
                         <button
                           type="button"
@@ -627,7 +657,7 @@ export default function MembersPage() {
 
       {showForm && (
         <SectionCard
-          title={isEditing ? 'Editar socio' : 'Nuevo socio'}
+          title={isEditing ? 'Editar H.·.' : 'Nuevo H.·.'}
           description="Los valores posibles de grado son Aprendiz, Compañero y Maestro."
         >
           <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
@@ -744,6 +774,20 @@ export default function MembersPage() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-ink/80">
+                Fecha de nacimiento
+              </label>
+              <input
+                type="date"
+                value={form.birthDate}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, birthDate: e.target.value }))
+                }
+                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+              />
             </div>
 
             <div>
