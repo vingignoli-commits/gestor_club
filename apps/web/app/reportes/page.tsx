@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { SectionCard } from '../../components/section-card';
 import { api } from '../../lib/api';
 
@@ -77,6 +77,9 @@ export default function ReportsPage() {
   const [monthly, setMonthly] = useState<MonthlyCollection[]>([]);
   const [categories, setCategories] = useState<CategorySummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [categoryValues, setCategoryValues] = useState<Record<string, string>>(
+    {},
+  );
 
   useEffect(() => {
     setLoading(true);
@@ -90,12 +93,43 @@ export default function ReportsPage() {
         setDebtors(d);
         setMonthly(m);
         setCategories(c);
+
+        setCategoryValues((prev) => {
+          const next = { ...prev };
+          for (const category of c) {
+            if (next[category.category] === undefined) {
+              next[category.category] = '';
+            }
+          }
+          return next;
+        });
       })
       .finally(() => setLoading(false));
   }, []);
 
   const totalDebt = debtors.reduce((sum, debtor) => sum + debtor.debt, 0);
   const totalCollected = monthly.reduce((sum, item) => sum + item.total, 0);
+
+  const categoryCalculationRows = useMemo(() => {
+    return categories.map((category) => {
+      const unitValue = Number(categoryValues[category.category] || 0);
+      const totalValue = unitValue * category.total;
+
+      return {
+        category: category.category,
+        totalMembers: category.total,
+        unitValue,
+        totalValue,
+      };
+    });
+  }, [categories, categoryValues]);
+
+  const totalCategoryProjection = useMemo(() => {
+    return categoryCalculationRows.reduce(
+      (sum, row) => sum + row.totalValue,
+      0,
+    );
+  }, [categoryCalculationRows]);
 
   return (
     <div className="space-y-6">
@@ -316,7 +350,7 @@ export default function ReportsPage() {
           {tab === 'categorias' && (
             <SectionCard
               title="Socios por categoría"
-              description="Distribución actual de socios activos e inactivos."
+              description="Distribución actual de socios activos e inactivos, más cálculo de proyección por valor unitario."
             >
               <div className="overflow-x-auto">
                 <table className="min-w-full border-separate border-spacing-y-2">
@@ -350,6 +384,79 @@ export default function ReportsPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+
+              <div className="mt-8 rounded-2xl border border-ink/10 bg-white p-4">
+                <div className="mb-4">
+                  <h3 className="text-lg font-semibold text-ink">
+                    Cálculo por valor unitario
+                  </h3>
+                  <p className="mt-1 text-sm text-ink/60">
+                    Ingresá un valor por categoría y el sistema calculará el
+                    producto de ese valor por la cantidad total de socios de la
+                    categoría.
+                  </p>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="min-w-full border-separate border-spacing-y-2">
+                    <thead>
+                      <tr className="text-left text-xs uppercase tracking-wide text-ink/50">
+                        <th className="px-3 py-2">Categoría</th>
+                        <th className="px-3 py-2">Socios</th>
+                        <th className="px-3 py-2">Valor unitario</th>
+                        <th className="px-3 py-2">Resultado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {categoryCalculationRows.map((row) => (
+                        <tr
+                          key={`calc-${row.category}`}
+                          className="rounded-2xl bg-ink/5 text-sm"
+                        >
+                          <td className="rounded-l-2xl px-3 py-3 text-ink">
+                            {CATEGORY_LABELS[row.category] ?? row.category}
+                          </td>
+                          <td className="px-3 py-3 text-ink/80">
+                            {row.totalMembers}
+                          </td>
+                          <td className="px-3 py-3">
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={categoryValues[row.category] ?? ''}
+                              onChange={(e) =>
+                                setCategoryValues((prev) => ({
+                                  ...prev,
+                                  [row.category]: e.target.value,
+                                }))
+                              }
+                              className="w-full rounded-xl border border-ink/10 px-3 py-2 text-sm"
+                              placeholder="0"
+                            />
+                          </td>
+                          <td className="rounded-r-2xl px-3 py-3 font-semibold text-ink">
+                            {fmt(row.totalValue)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="text-sm">
+                        <td
+                          colSpan={3}
+                          className="px-3 py-4 text-right font-semibold text-ink"
+                        >
+                          Total general
+                        </td>
+                        <td className="px-3 py-4 text-left text-lg font-bold text-accent">
+                          {fmt(totalCategoryProjection)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
               </div>
             </SectionCard>
           )}
