@@ -27,6 +27,22 @@ type CashSummary = {
 
 type GroupMode = 'month' | 'year' | 'category';
 
+const INCOME_TYPE_LABELS: Record<string, string> = {
+  MEMBERSHIP: 'Cuotas',
+  SALE: 'Ventas',
+  DONATION: 'Donaciones',
+  TRAINING: 'Capacitaciones',
+  OTHER: 'Otros ingresos',
+};
+
+const EXPENSE_TYPE_LABELS: Record<string, string> = {
+  SUPPLIES: 'Insumos',
+  SERVICES: 'Servicios',
+  SALARY: 'Salarios',
+  MAINTENANCE: 'Mantenimiento',
+  OTHER: 'Otros egresos',
+};
+
 function fmtMoney(value: number) {
   return new Intl.NumberFormat('es-AR', {
     style: 'currency',
@@ -47,10 +63,10 @@ function signedAmount(transaction: CashTransaction) {
 
 function categoryLabel(transaction: CashTransaction) {
   if (transaction.direction === 'IN') {
-    return transaction.incomeType ?? 'OTHER';
+    return INCOME_TYPE_LABELS[transaction.incomeType ?? 'OTHER'] ?? 'Otros ingresos';
   }
 
-  return transaction.expenseType ?? 'OTHER';
+  return EXPENSE_TYPE_LABELS[transaction.expenseType ?? 'OTHER'] ?? 'Otros egresos';
 }
 
 function groupLabel(transaction: CashTransaction, mode: GroupMode) {
@@ -70,12 +86,32 @@ function groupLabel(transaction: CashTransaction, mode: GroupMode) {
   return categoryLabel(transaction);
 }
 
+function isWithinDateRange(
+  transaction: CashTransaction,
+  dateFrom: string,
+  dateTo: string,
+) {
+  const occurredDate = transaction.occurredAt.slice(0, 10);
+
+  if (dateFrom && occurredDate < dateFrom) {
+    return false;
+  }
+
+  if (dateTo && occurredDate > dateTo) {
+    return false;
+  }
+
+  return true;
+}
+
 export default function CajaPage() {
   const [summary, setSummary] = useState<CashSummary | null>(null);
   const [groupMode, setGroupMode] = useState<GroupMode>('month');
   const [loading, setLoading] = useState(true);
   const [savingCorrection, setSavingCorrection] = useState(false);
   const [error, setError] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   const [correctionForm, setCorrectionForm] = useState({
     actualBalance: '',
@@ -96,8 +132,31 @@ export default function CajaPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const groupedTransactions = useMemo(() => {
+  const filteredTransactions = useMemo(() => {
     const transactions = summary?.transactions ?? [];
+
+    return transactions.filter((transaction) =>
+      isWithinDateRange(transaction, dateFrom, dateTo),
+    );
+  }, [summary, dateFrom, dateTo]);
+
+  const filteredTotals = useMemo(() => {
+    const totalIn = filteredTransactions
+      .filter((transaction) => transaction.direction === 'IN')
+      .reduce((sum, transaction) => sum + Number(transaction.amount), 0);
+
+    const totalOut = filteredTransactions
+      .filter((transaction) => transaction.direction === 'OUT')
+      .reduce((sum, transaction) => sum + Number(transaction.amount), 0);
+
+    return {
+      totalIn,
+      totalOut,
+      balance: totalIn - totalOut,
+    };
+  }, [filteredTransactions]);
+
+  const groupedTransactions = useMemo(() => {
     const groups = new Map<
       string,
       {
@@ -109,7 +168,7 @@ export default function CajaPage() {
       }
     >();
 
-    for (const transaction of transactions) {
+    for (const transaction of filteredTransactions) {
       const label = groupLabel(transaction, groupMode);
       const current = groups.get(label) ?? {
         label,
@@ -133,7 +192,7 @@ export default function CajaPage() {
     return Array.from(groups.values()).sort((a, b) =>
       a.label.localeCompare(b.label, 'es', { numeric: true, sensitivity: 'base' }),
     );
-  }, [summary, groupMode]);
+  }, [filteredTransactions, groupMode]);
 
   async function handleCorrection(e: React.FormEvent) {
     e.preventDefault();
@@ -163,11 +222,18 @@ export default function CajaPage() {
     }
   }
 
+  function clearDateFilters() {
+    setDateFrom('');
+    setDateTo('');
+  }
+
+  const hasDateFilters = Boolean(dateFrom || dateTo);
+
   return (
     <div className="space-y-6">
       <SectionCard
         title="Caja"
-        description="Control de ingresos y egresos con saldo resaltado, agrupaciones y ajuste por valor real."
+        description="Control de ingresos y egresos con saldo resaltado, agrupaciones, filtro por fecha y ajuste por valor real."
       >
         {loading || !summary ? (
           <div className="py-8 text-sm text-ink/60">Cargando caja...</div>
@@ -179,7 +245,7 @@ export default function CajaPage() {
                   Ingresos
                 </div>
                 <div className="mt-2 text-2xl font-bold text-emerald-700">
-                  {fmtMoney(summary.totalIn)}
+                  {fmtMoney(filteredTotals.totalIn)}
                 </div>
               </div>
 
@@ -188,7 +254,7 @@ export default function CajaPage() {
                   Egresos
                 </div>
                 <div className="mt-2 text-2xl font-bold text-rose-700">
-                  {fmtMoney(summary.totalOut)}
+                  {fmtMoney(filteredTotals.totalOut)}
                 </div>
               </div>
 
@@ -198,12 +264,65 @@ export default function CajaPage() {
                 </div>
                 <div
                   className={`mt-2 text-3xl font-bold ${
-                    summary.balance >= 0 ? 'text-accent' : 'text-rose-700'
+                    filteredTotals.balance >= 0 ? 'text-accent' : 'text-rose-700'
                   }`}
                 >
-                  {fmtMoney(summary.balance)}
+                  {fmtMoney(filteredTotals.balance)}
                 </div>
               </div>
+            </div>
+
+            <div className="mt-6 rounded-2xl border border-ink/10 bg-white p-4">
+              <div className="mb-4 text-sm font-semibold text-ink">
+                Filtro por fecha
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-[1fr_1fr_auto]">
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-ink/80">
+                    Desde
+                  </label>
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-ink/80">
+                    Hasta
+                  </label>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                  />
+                </div>
+
+                <div className="flex items-end">
+                  <button
+                    type="button"
+                    onClick={clearDateFilters}
+                    className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm font-semibold text-ink/80"
+                  >
+                    Limpiar filtro
+                  </button>
+                </div>
+              </div>
+
+              {hasDateFilters && (
+                <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  Filtro activo:{' '}
+                  <span className="font-semibold">
+                    {dateFrom ? `desde ${formatDate(dateFrom)}` : ''}
+                    {dateFrom && dateTo ? ' ' : ''}
+                    {dateTo ? `hasta ${formatDate(dateTo)}` : ''}
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="mt-6 flex flex-wrap items-center gap-3">
@@ -256,7 +375,7 @@ export default function CajaPage() {
               <div className="space-y-4">
                 {groupedTransactions.length === 0 ? (
                   <div className="rounded-2xl border border-ink/10 bg-white p-6 text-sm text-ink/60">
-                    No hay movimientos de caja.
+                    No hay movimientos de caja para el filtro actual.
                   </div>
                 ) : (
                   groupedTransactions.map((group) => (
@@ -350,7 +469,6 @@ export default function CajaPage() {
                     <input
                       type="number"
                       step="0.01"
-                      min="0"
                       value={correctionForm.actualBalance}
                       onChange={(e) =>
                         setCorrectionForm((prev) => ({
