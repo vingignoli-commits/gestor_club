@@ -222,45 +222,54 @@ export class WhatsappService {
     };
   }
 
-  async createCurrentMonthDuesCampaign() {
-    const campaign = await this.getCurrentMonthDuesCampaign();
+  async markCurrentMonthDuesSent(memberId: string) {
     const queryDate = new Date();
     const currentYear = queryDate.getUTCFullYear();
     const currentMonth = queryDate.getUTCMonth() + 1;
 
-    const pendingRecipients = campaign.recipients.filter(
-      (recipient) => !recipient.reminderSentThisMonth,
+    const existingDispatch = await this.prisma.messageDispatch.findFirst({
+      where: {
+        memberId,
+        campaignCode: 'current-month-dues',
+        campaignYear: currentYear,
+        campaignMonth: currentMonth,
+      },
+      include: {
+        member: true,
+        template: true,
+      },
+    });
+
+    if (existingDispatch) {
+      return existingDispatch;
+    }
+
+    const campaign = await this.getCurrentMonthDuesCampaign();
+    const recipient = campaign.recipients.find(
+      (item) => item.memberId === memberId,
     );
 
-    const created = await this.prisma.$transaction(
-      pendingRecipients.map((recipient) =>
-        this.prisma.messageDispatch.create({
-          data: {
-            memberId: recipient.memberId,
-            destination: recipient.destination,
-            renderedBody: recipient.message,
-            status: 'PENDING',
-            campaignCode: 'current-month-dues',
-            campaignYear: currentYear,
-            campaignMonth: currentMonth,
-          },
-          include: {
-            member: true,
-            template: true,
-          },
-        }),
-      ),
-    );
+    if (!recipient) {
+      throw new NotFoundException(
+        'El socio no corresponde a la campaña del mes actual.',
+      );
+    }
 
-    return {
-      campaignCode: campaign.campaignCode,
-      generatedAt: campaign.generatedAt,
-      createdCount: created.length,
-      skippedAlreadySentCount: campaign.recipients.filter(
-        (recipient) => recipient.reminderSentThisMonth,
-      ).length,
-      dispatches: created,
-    };
+    return this.prisma.messageDispatch.create({
+      data: {
+        memberId: recipient.memberId,
+        destination: recipient.destination,
+        renderedBody: recipient.message,
+        status: 'PENDING',
+        campaignCode: 'current-month-dues',
+        campaignYear: currentYear,
+        campaignMonth: currentMonth,
+      },
+      include: {
+        member: true,
+        template: true,
+      },
+    });
   }
 
   async sendMessage(
