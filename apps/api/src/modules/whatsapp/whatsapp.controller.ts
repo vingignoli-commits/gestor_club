@@ -10,24 +10,34 @@ export class WhatsappController {
     return this.whatsappService.getTemplates();
   }
 
-  @Get('dispatches')
-  getDispatches() {
-    return this.whatsappService.getDispatches();
+  @Get('campaigns/initial-notice')
+  getInitialNoticeCampaign() {
+    return this.whatsappService.getInitialNoticeCampaign();
   }
 
-  @Get('campaigns/current-month-dues')
-  getCurrentMonthDuesCampaign() {
-    return this.whatsappService.getCurrentMonthDuesCampaign();
-  }
-
-  @Post('campaigns/current-month-dues/mark-sent')
-  markCurrentMonthDuesSent(
+  @Post('campaigns/initial-notice/mark-sent')
+  markInitialNoticeSent(
     @Body()
     body: {
       memberId: string;
     },
   ) {
-    return this.whatsappService.markCurrentMonthDuesSent(body.memberId);
+    return this.whatsappService.markCampaignSent('initial-notice', body.memberId);
+  }
+
+  @Get('campaigns/reminder')
+  getReminderCampaign() {
+    return this.whatsappService.getReminderCampaign();
+  }
+
+  @Post('campaigns/reminder/mark-sent')
+  markReminderSent(
+    @Body()
+    body: {
+      memberId: string;
+    },
+  ) {
+    return this.whatsappService.markCampaignSent('reminder', body.memberId);
   }
 
   @Post('send')
