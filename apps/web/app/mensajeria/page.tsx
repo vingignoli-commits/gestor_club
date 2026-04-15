@@ -78,7 +78,7 @@ export default function MessagingPage() {
   const [campaign, setCampaign] = useState<CampaignPreview | null>(null);
   const [dispatches, setDispatches] = useState<Dispatch[]>([]);
   const [loading, setLoading] = useState(true);
-  const [creatingCampaign, setCreatingCampaign] = useState(false);
+  const [sendingMemberId, setSendingMemberId] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   async function loadAll() {
@@ -103,21 +103,23 @@ export default function MessagingPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  async function handleCreateCampaign() {
-    setCreatingCampaign(true);
+  async function handleMarkSent(memberId: string) {
+    setSendingMemberId(memberId);
     setError('');
 
     try {
-      await api.post('/whatsapp/campaigns/current-month-dues', {});
+      await api.post('/whatsapp/campaigns/current-month-dues/mark-sent', {
+        memberId,
+      });
       await loadAll();
     } catch (err: unknown) {
       setError(
         err instanceof Error
           ? err.message
-          : 'No se pudo generar la campaña',
+          : 'No se pudo registrar el envío individual',
       );
     } finally {
-      setCreatingCampaign(false);
+      setSendingMemberId(null);
     }
   }
 
@@ -125,7 +127,7 @@ export default function MessagingPage() {
     <div className="space-y-6">
       <SectionCard
         title="Campaña de aviso de cuota del mes en curso"
-        description="Solo se incluye a socios que deban el mes actual. Si el socio ya pagó el mes en curso y no registra deuda, queda marcado para no enviar mensaje."
+        description="El registro de envío es individual para cada socio. Solo se incluye a socios que deban el mes actual."
       >
         {loading ? (
           <div className="py-8 text-sm text-ink/60">Cargando campaña...</div>
@@ -172,7 +174,8 @@ export default function MessagingPage() {
             <div className="rounded-2xl border border-ink/10 bg-slate-50 p-4 text-sm text-ink/70">
               El mensaje incluye el valor de la cuota del mes actual, el alias
               <span className="font-semibold text-ink"> tesoreria.p100</span> y,
-              si corresponde, los meses vencidos anteriores.
+              si corresponde, los meses vencidos anteriores. El envío se marca
+              de manera individual desde cada registro.
             </div>
 
             {error && (
@@ -180,21 +183,6 @@ export default function MessagingPage() {
                 {error}
               </div>
             )}
-
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={handleCreateCampaign}
-                disabled={
-                  creatingCampaign ||
-                  campaign.recipients.filter((recipient) => !recipient.reminderSentThisMonth)
-                    .length === 0
-                }
-                className="rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
-              >
-                {creatingCampaign ? 'Generando...' : 'Registrar campaña'}
-              </button>
-            </div>
 
             {campaign.recipients.length === 0 ? (
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-800">
@@ -256,14 +244,32 @@ export default function MessagingPage() {
                         </div>
                       </div>
 
-                      <a
-                        href={recipient.waUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700"
-                      >
-                        Abrir WhatsApp
-                      </a>
+                      <div className="flex flex-col gap-3">
+                        <a
+                          href={recipient.waUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-700"
+                        >
+                          Abrir WhatsApp
+                        </a>
+
+                        <button
+                          type="button"
+                          onClick={() => handleMarkSent(recipient.memberId)}
+                          disabled={
+                            recipient.reminderSentThisMonth ||
+                            sendingMemberId === recipient.memberId
+                          }
+                          className="rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
+                        >
+                          {recipient.reminderSentThisMonth
+                            ? 'Ya registrado'
+                            : sendingMemberId === recipient.memberId
+                              ? 'Registrando...'
+                              : 'Registrar envío'}
+                        </button>
+                      </div>
                     </div>
 
                     <div className="mt-4 rounded-2xl bg-ink/5 p-4">
