@@ -20,9 +20,14 @@ export class WhatsappController {
     return this.whatsappService.getCurrentMonthDuesCampaign();
   }
 
-  @Post('campaigns/current-month-dues')
-  createCurrentMonthDuesCampaign() {
-    return this.whatsappService.createCurrentMonthDuesCampaign();
+  @Post('campaigns/current-month-dues/mark-sent')
+  markCurrentMonthDuesSent(
+    @Body()
+    body: {
+      memberId: string;
+    },
+  ) {
+    return this.whatsappService.markCurrentMonthDuesSent(body.memberId);
   }
 
   @Post('send')
