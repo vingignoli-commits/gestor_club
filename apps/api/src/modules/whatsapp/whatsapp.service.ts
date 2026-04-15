@@ -7,6 +7,8 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
+type CampaignCode = 'initial-notice' | 'reminder';
+
 type MemberWithDebtData = Prisma.MemberGetPayload<{
   include: {
     payments: true;
@@ -47,7 +49,7 @@ type CampaignSkipped = {
   firstName: string;
   lastName: string;
   destination: string | null;
-  reasonCode: 'NO_PHONE' | 'PAID_CURRENT_MONTH_AND_NO_DEBT' | 'NO_CURRENT_MONTH_DEBT';
+  reasonCode: 'NO_DEBT';
   reasonLabel: string;
 };
 
@@ -77,152 +79,15 @@ export class WhatsappService {
     });
   }
 
-  getDispatches() {
-    return this.prisma.messageDispatch.findMany({
-      include: { member: true, template: true },
-      orderBy: { createdAt: 'desc' },
-    });
+  async getInitialNoticeCampaign() {
+    return this.buildCampaign('initial-notice');
   }
 
-  async getCurrentMonthDuesCampaign() {
-    const queryDate = new Date();
-    const currentYear = queryDate.getUTCFullYear();
-    const currentMonth = queryDate.getUTCMonth() + 1;
-
-    const [members, rates, existingDispatches] = await Promise.all([
-      this.prisma.member.findMany({
-        include: {
-          payments: {
-            where: { status: PaymentStatus.REGISTERED },
-            orderBy: [{ periodYear: 'desc' }, { periodMonth: 'desc' }],
-          },
-          statusHistory: {
-            orderBy: { effectiveFrom: 'desc' },
-          },
-          categoryHistory: {
-            orderBy: { effectiveFrom: 'desc' },
-          },
-        },
-        orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
-      }),
-      this.prisma.monthlyRate.findMany({
-        where: {
-          validFrom: { lte: queryDate },
-          OR: [{ validTo: null }, { validTo: { gt: queryDate } }],
-        },
-        orderBy: [{ category: 'asc' }, { validFrom: 'desc' }],
-      }),
-      this.prisma.messageDispatch.findMany({
-        where: {
-          campaignCode: 'current-month-dues',
-          campaignYear: currentYear,
-          campaignMonth: currentMonth,
-        },
-        select: {
-          memberId: true,
-        },
-      }),
-    ]);
-
-    const currentRates = this.buildCurrentRatesMap(rates, queryDate);
-    const remindedMemberIds = new Set(
-      existingDispatches
-        .map((dispatch) => dispatch.memberId)
-        .filter((memberId): memberId is string => Boolean(memberId)),
-    );
-
-    const recipients: CampaignRecipient[] = [];
-    const skipped: CampaignSkipped[] = [];
-
-    for (const member of members) {
-      const phone = this.normalizePhone(member.phone);
-      const snapshot = this.buildDebtSnapshot(member, currentRates, queryDate);
-
-      if (!phone) {
-        skipped.push({
-          memberId: member.id,
-          matricula: member.matricula,
-          firstName: member.firstName,
-          lastName: member.lastName,
-          destination: null,
-          reasonCode: 'NO_PHONE',
-          reasonLabel: 'No tiene celular cargado',
-        });
-        continue;
-      }
-
-      if (!snapshot.owesCurrentMonth && snapshot.monthsOwed === 0) {
-        skipped.push({
-          memberId: member.id,
-          matricula: member.matricula,
-          firstName: member.firstName,
-          lastName: member.lastName,
-          destination: phone,
-          reasonCode: 'PAID_CURRENT_MONTH_AND_NO_DEBT',
-          reasonLabel: 'Ya pagó el mes en curso y no registra deuda',
-        });
-        continue;
-      }
-
-      if (!snapshot.owesCurrentMonth) {
-        skipped.push({
-          memberId: member.id,
-          matricula: member.matricula,
-          firstName: member.firstName,
-          lastName: member.lastName,
-          destination: phone,
-          reasonCode: 'NO_CURRENT_MONTH_DEBT',
-          reasonLabel: 'No debe el mes en curso',
-        });
-        continue;
-      }
-
-      const currentMonthAmount =
-        snapshot.months.find((month) => month.isCurrentMonth)?.amount ?? 0;
-
-      const message = this.buildCurrentMonthDebtMessage(
-        member.firstName,
-        member.grade,
-        snapshot.currentMonthLabel,
-        currentMonthAmount,
-        snapshot.overdueMonthLabels,
-      );
-
-      const reminderSentThisMonth = remindedMemberIds.has(member.id);
-
-      recipients.push({
-        memberId: member.id,
-        matricula: member.matricula,
-        firstName: member.firstName,
-        lastName: member.lastName,
-        grade: member.grade,
-        destination: phone,
-        message,
-        waUrl: `https://wa.me/${phone}?text=${encodeURIComponent(message)}`,
-        reminderSentThisMonth,
-        debt: {
-          totalDebt: snapshot.debt,
-          monthsOwed: snapshot.monthsOwed,
-          owesCurrentMonth: snapshot.owesCurrentMonth,
-          overdueMonthLabels: snapshot.overdueMonthLabels,
-          currentMonthAmount,
-          months: snapshot.months,
-        },
-      });
-    }
-
-    return {
-      campaignCode: 'current-month-dues',
-      generatedAt: queryDate.toISOString(),
-      currentMonthLabel: this.monthLabel(currentYear, currentMonth),
-      recipientsCount: recipients.length,
-      skippedCount: skipped.length,
-      recipients,
-      skipped,
-    };
+  async getReminderCampaign() {
+    return this.buildCampaign('reminder');
   }
 
-  async markCurrentMonthDuesSent(memberId: string) {
+  async markCampaignSent(campaignCode: CampaignCode, memberId: string) {
     const queryDate = new Date();
     const currentYear = queryDate.getUTCFullYear();
     const currentMonth = queryDate.getUTCMonth() + 1;
@@ -230,7 +95,7 @@ export class WhatsappService {
     const existingDispatch = await this.prisma.messageDispatch.findFirst({
       where: {
         memberId,
-        campaignCode: 'current-month-dues',
+        campaignCode,
         campaignYear: currentYear,
         campaignMonth: currentMonth,
       },
@@ -244,14 +109,18 @@ export class WhatsappService {
       return existingDispatch;
     }
 
-    const campaign = await this.getCurrentMonthDuesCampaign();
+    const campaign =
+      campaignCode === 'initial-notice'
+        ? await this.getInitialNoticeCampaign()
+        : await this.getReminderCampaign();
+
     const recipient = campaign.recipients.find(
       (item) => item.memberId === memberId,
     );
 
     if (!recipient) {
       throw new NotFoundException(
-        'El socio no corresponde a la campaña del mes actual.',
+        'El socio no corresponde a la campaña seleccionada.',
       );
     }
 
@@ -261,7 +130,7 @@ export class WhatsappService {
         destination: recipient.destination,
         renderedBody: recipient.message,
         status: 'PENDING',
-        campaignCode: 'current-month-dues',
+        campaignCode,
         campaignYear: currentYear,
         campaignMonth: currentMonth,
       },
@@ -334,7 +203,130 @@ export class WhatsappService {
     });
   }
 
-  private buildCurrentMonthDebtMessage(
+  private async buildCampaign(campaignCode: CampaignCode) {
+    const queryDate = new Date();
+    const currentYear = queryDate.getUTCFullYear();
+    const currentMonth = queryDate.getUTCMonth() + 1;
+
+    const [members, rates, existingDispatches] = await Promise.all([
+      this.prisma.member.findMany({
+        include: {
+          payments: {
+            where: { status: PaymentStatus.REGISTERED },
+            orderBy: [{ periodYear: 'desc' }, { periodMonth: 'desc' }],
+          },
+          statusHistory: {
+            orderBy: { effectiveFrom: 'desc' },
+          },
+          categoryHistory: {
+            orderBy: { effectiveFrom: 'desc' },
+          },
+        },
+        orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+      }),
+      this.prisma.monthlyRate.findMany({
+        where: {
+          validFrom: { lte: queryDate },
+          OR: [{ validTo: null }, { validTo: { gt: queryDate } }],
+        },
+        orderBy: [{ category: 'asc' }, { validFrom: 'desc' }],
+      }),
+      this.prisma.messageDispatch.findMany({
+        where: {
+          campaignCode,
+          campaignYear: currentYear,
+          campaignMonth: currentMonth,
+        },
+        select: {
+          memberId: true,
+        },
+      }),
+    ]);
+
+    const currentRates = this.buildCurrentRatesMap(rates, queryDate);
+    const remindedMemberIds = new Set(
+      existingDispatches
+        .map((dispatch) => dispatch.memberId)
+        .filter((memberId): memberId is string => Boolean(memberId)),
+    );
+
+    const recipients: CampaignRecipient[] = [];
+    const skipped: CampaignSkipped[] = [];
+
+    for (const member of members) {
+      const phone = this.normalizePhone(member.phone);
+      const snapshot = this.buildDebtSnapshot(member, currentRates, queryDate);
+
+      if (snapshot.monthsOwed === 0) {
+        skipped.push({
+          memberId: member.id,
+          matricula: member.matricula,
+          firstName: member.firstName,
+          lastName: member.lastName,
+          destination: phone,
+          reasonCode: 'NO_DEBT',
+          reasonLabel: 'No registra cuotas adeudadas',
+        });
+        continue;
+      }
+
+      const currentMonthAmount =
+        snapshot.months.find((month) => month.isCurrentMonth)?.amount ??
+        currentRates.get(member.category) ??
+        0;
+
+      const message =
+        campaignCode === 'initial-notice'
+          ? this.buildInitialNoticeMessage(
+              member.firstName,
+              member.grade,
+              snapshot.currentMonthLabel,
+              currentMonthAmount,
+              snapshot.overdueMonthLabels,
+            )
+          : this.buildReminderMessage(
+              member.firstName,
+              member.grade,
+              snapshot.months.map((month) => month.label),
+            );
+
+      const waUrl = phone
+        ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+        : '';
+
+      recipients.push({
+        memberId: member.id,
+        matricula: member.matricula,
+        firstName: member.firstName,
+        lastName: member.lastName,
+        grade: member.grade,
+        destination: phone ?? '',
+        message,
+        waUrl,
+        reminderSentThisMonth: remindedMemberIds.has(member.id),
+        debt: {
+          totalDebt: snapshot.debt,
+          monthsOwed: snapshot.monthsOwed,
+          owesCurrentMonth: snapshot.owesCurrentMonth,
+          overdueMonthLabels: snapshot.overdueMonthLabels,
+          currentMonthAmount,
+          months: snapshot.months,
+        },
+      });
+    }
+
+    return {
+      campaignCode,
+      generatedAt: queryDate.toISOString(),
+      currentMonthLabel: this.monthLabel(currentYear, currentMonth),
+      recipientsCount: recipients.length,
+      skippedCount: skipped.length,
+      recipients,
+      skipped,
+    };
+  }
+
+  private buildInitialNoticeMessage(
     firstName: string,
     grade: string | null,
     currentMonthLabel: string,
@@ -349,10 +341,23 @@ export class WhatsappService {
     const currentAmountText = this.formatCurrency(currentMonthAmount);
 
     if (overdueMonthLabels.length === 0) {
-      return `${greeting} Siendo que arrancó el ${currentMonthLabel} estamos haciendo el seguimiento de los pagos de la cápita, lo tuyo es ${currentAmountText} y lo debes transferir al alias tesoreria.p100 así como también enviarme el comprobante por este mismo medio. Desde ya muchas gracias y abrazo grande Q.·.H.·.`;
+      return `${greeting} Siendo que arrancó el ${currentMonthLabel}  estamos haciendo el seguimiento de los pagos de la cápita, lo tuyo es ${currentAmountText} y lo debes transferir al alias tesoreria.p100 así como también enviarme el comprobante por este mismo medio. Desde ya muchas gracias y abrazo grande Q.·.H.·.`;
     }
 
-    return `${greeting} Siendo que arrancó el ${currentMonthLabel} estamos haciendo el seguimiento de los pagos de la cápita, lo tuyo es ${currentAmountText} y lo debes transferir al alias tesoreria.p100 así como también enviarme el comprobante por este mismo medio. Además, registrás cuotas adeudadas de los siguientes meses: ${overdueMonthLabels.join(', ')}. Desde ya muchas gracias y abrazo grande Q.·.H.·.`;
+    return `${greeting} Siendo que arrancó el ${currentMonthLabel}  estamos haciendo el seguimiento de los pagos de la cápita, lo tuyo es ${currentAmountText} y lo debes transferir al alias tesoreria.p100 así como también enviarme el comprobante por este mismo medio. Además, registrás cuotas adeudadas de los siguientes meses: ${overdueMonthLabels.join(', ')}. Desde ya muchas gracias y abrazo grande Q.·.H.·.`;
+  }
+
+  private buildReminderMessage(
+    firstName: string,
+    grade: string | null,
+    owedMonthLabels: string[],
+  ) {
+    const greeting =
+      grade === 'MAESTRO'
+        ? `Hola V.·.H.·. ${firstName}.`
+        : `Hola Q.·.H.·. ${firstName}.`;
+
+    return `${greeting} Este mensaje es solo recordatorio que todavía no has abonado la totalidad de las cápitas.\nRegistrás cuotas adeudadas de los siguientes meses: ${owedMonthLabels.join(', ')}. Cualqueir inquietud estoy disponible.\nT.·.A.·.F.·.`;
   }
 
   private formatCurrency(amount: number) {
