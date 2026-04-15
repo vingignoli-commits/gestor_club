@@ -1,14 +1,15 @@
 'use client';
 
 import Link from 'next/link';
+import type { Route } from 'next';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '../context/auth';
 
-const navigation = [
+const navigation: Array<{ label: string; href: Route }> = [
   { label: 'Dashboard', href: '/' },
+  { label: 'Caja', href: '/caja' },
   { label: 'Socios', href: '/socios' },
   { label: 'Tesoreria', href: '/tesoreria' },
-  { label: 'Caja', href: '/caja' },
   { label: 'Reportes', href: '/reportes' },
   { label: 'Mensajeria', href: '/mensajeria' },
   { label: 'Auditoria', href: '/auditoria' },
@@ -60,7 +61,7 @@ export function Sidebar() {
           </div>
         ) : (
           <Link
-            href="/login"
+            href={'/login' as Route}
             className="block rounded-2xl border border-ink/10 px-4 py-3 text-center text-sm font-semibold text-ink/75 hover:bg-ink/5 hover:text-ink"
           >
             Ingresar
