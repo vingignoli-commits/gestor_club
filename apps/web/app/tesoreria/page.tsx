@@ -194,27 +194,19 @@ export default function TreasuryPage() {
   }, [rates, selectedMember]);
 
   useEffect(() => {
-    if (selectedRate) {
-      setForm((prev) => {
-        if (prev.amount === '' || prev.amount === '0') {
-          return {
-            ...prev,
-            amount: String(selectedRate.amount),
-          };
-        }
-
-        return prev;
-      });
-      return;
-    }
-
-    if (selectedMember) {
+    if (!selectedMember) {
       setForm((prev) => ({
         ...prev,
         amount: '',
       }));
+      return;
     }
-  }, [selectedMember, selectedRate]);
+
+    setForm((prev) => ({
+      ...prev,
+      amount: selectedRate ? String(selectedRate.amount) : '',
+    }));
+  }, [selectedMember?.id, selectedMember?.category, selectedRate?.amount]);
 
   useEffect(() => {
     if (!form.memberId) {
@@ -500,8 +492,8 @@ export default function TreasuryPage() {
                   className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
                 />
                 <p className="mt-2 text-xs text-ink/50">
-                  Se completa automáticamente, pero puede modificarse si existe
-                  un beneficio excepcional para ese cobro.
+                  Se completa automáticamente al elegir el socio, pero puede
+                  modificarse manualmente si existe un beneficio excepcional.
                 </p>
               </div>
 
