@@ -77,6 +77,7 @@ export class MembersService {
           email: dto.email?.trim() || null,
           notes: dto.notes?.trim() || null,
           joinedAt,
+          birthDate: dto.birthDate ? new Date(dto.birthDate) : null,
           statusHistory: {
             create: {
               status: dto.status ?? 'ACTIVE',
@@ -192,6 +193,12 @@ export class MembersService {
             phone: dto.phone === undefined ? undefined : dto.phone.trim() || null,
             email: dto.email === undefined ? undefined : dto.email.trim() || null,
             notes: dto.notes === undefined ? undefined : dto.notes.trim() || null,
+            birthDate:
+              dto.birthDate === undefined
+                ? undefined
+                : dto.birthDate
+                  ? new Date(dto.birthDate)
+                  : null,
           },
         });
       });
