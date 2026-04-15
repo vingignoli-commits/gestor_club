@@ -113,11 +113,11 @@ export default function ReportsPage() {
   const categoryCalculationRows = useMemo(() => {
     return categories.map((category) => {
       const unitValue = Number(categoryValues[category.category] || 0);
-      const totalValue = unitValue * category.total;
+      const totalValue = unitValue * category.active;
 
       return {
         category: category.category,
-        totalMembers: category.total,
+        activeMembers: category.active,
         unitValue,
         totalValue,
       };
@@ -350,7 +350,7 @@ export default function ReportsPage() {
           {tab === 'categorias' && (
             <SectionCard
               title="Socios por categoría"
-              description="Distribución actual de socios activos e inactivos, más cálculo de proyección por valor unitario."
+              description="Distribución actual de socios activos e inactivos, más cálculo de proyección usando solo socios activos."
             >
               <div className="overflow-x-auto">
                 <table className="min-w-full border-separate border-spacing-y-2">
@@ -393,7 +393,7 @@ export default function ReportsPage() {
                   </h3>
                   <p className="mt-1 text-sm text-ink/60">
                     Ingresá un valor por categoría y el sistema calculará el
-                    producto de ese valor por la cantidad total de socios de la
+                    producto de ese valor por la cantidad de socios activos de la
                     categoría.
                   </p>
                 </div>
@@ -403,7 +403,7 @@ export default function ReportsPage() {
                     <thead>
                       <tr className="text-left text-xs uppercase tracking-wide text-ink/50">
                         <th className="px-3 py-2">Categoría</th>
-                        <th className="px-3 py-2">Socios</th>
+                        <th className="px-3 py-2">Socios activos</th>
                         <th className="px-3 py-2">Valor unitario</th>
                         <th className="px-3 py-2">Resultado</th>
                       </tr>
@@ -418,7 +418,7 @@ export default function ReportsPage() {
                             {CATEGORY_LABELS[row.category] ?? row.category}
                           </td>
                           <td className="px-3 py-3 text-ink/80">
-                            {row.totalMembers}
+                            {row.activeMembers}
                           </td>
                           <td className="px-3 py-3">
                             <input
