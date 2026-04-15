@@ -65,6 +65,7 @@ model Member {
   email           String?
   notes           String?
   joinedAt        DateTime
+  birthDate       DateTime?
   createdAt       DateTime                @default(now())
   updatedAt       DateTime                @updatedAt
   charges         Charge[]
@@ -139,9 +140,10 @@ model Charge {
   paidAmount      Decimal            @db.Decimal(12, 2) @default(0)
   dueDate         DateTime
   createdAt       DateTime           @default(now())
-  member          Member             @relation(fields: [memberId], references: [id])
-  billingPeriod   BillingPeriod      @relation(fields: [billingPeriodId], references: [id])
-  allocations     PaymentAllocation[]
+
+  member        Member             @relation(fields: [memberId], references: [id])
+  billingPeriod BillingPeriod      @relation(fields: [billingPeriodId], references: [id])
+  allocations   PaymentAllocation[]
 
   @@unique([memberId, billingPeriodId])
   @@index([memberId])
@@ -174,7 +176,7 @@ model PaymentAllocation {
   createdAt DateTime @default(now())
 
   payment Payment @relation(fields: [paymentId], references: [id])
-  charge  Charge  @relation(fields: [chargeId], references: [id])
+  charge   Charge  @relation(fields: [chargeId], references: [id])
 }
 
 model CashTransaction {
