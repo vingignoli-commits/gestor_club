@@ -5,20 +5,28 @@ import type { Route } from 'next';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '../context/auth';
 
-const navigation: Array<{ label: string; href: Route }> = [
-  { label: 'Dashboard', href: '/' },
-  { label: 'Cuadro', href: '/socios' },
-  { label: 'Tesoreria', href: '/tesoreria' },
-  { label: 'Caja', href: '/caja' },
-  { label: 'Reportes', href: '/reportes' },
-  { label: 'Mensajeria', href: '/mensajeria' },
-  { label: 'Auditoria', href: '/auditoria' },
-  { label: 'Configuracion', href: '/configuracion' },
+const navigation: Array<{
+  label: string;
+  href: Route;
+  roles: Array<'ADMIN' | 'GENERAL'>;
+}> = [
+  { label: 'Dashboard', href: '/', roles: ['ADMIN', 'GENERAL'] },
+  { label: 'Cuadro', href: '/socios', roles: ['ADMIN', 'GENERAL'] },
+  { label: 'Tesoreria', href: '/tesoreria', roles: ['ADMIN'] },
+  { label: 'Caja', href: '/caja', roles: ['ADMIN', 'GENERAL'] },
+  { label: 'Reportes', href: '/reportes', roles: ['ADMIN', 'GENERAL'] },
+  { label: 'Mensajeria', href: '/mensajeria', roles: ['ADMIN'] },
+  { label: 'Auditoria', href: '/auditoria', roles: ['ADMIN'] },
+  { label: 'Configuracion', href: '/configuracion', roles: ['ADMIN'] },
 ];
 
 export function Sidebar() {
   const { user, logout } = useAuth();
   const pathname = usePathname();
+
+  const items = navigation.filter(
+    (item) => user && item.roles.includes(user.role),
+  );
 
   return (
     <aside className="flex h-full w-72 flex-col border-r border-ink/10 bg-white px-5 py-6">
@@ -28,7 +36,7 @@ export function Sidebar() {
       </div>
 
       <nav className="flex flex-1 flex-col gap-2">
-        {navigation.map((item) => {
+        {items.map((item) => {
           const isActive = pathname === item.href;
 
           return (
@@ -51,6 +59,9 @@ export function Sidebar() {
         {user ? (
           <div className="space-y-3">
             <div className="text-sm font-semibold text-ink">{user.fullName}</div>
+            <div className="text-xs uppercase tracking-wide text-ink/50">
+              {user.role === 'ADMIN' ? 'Administrador' : 'Usuario general'}
+            </div>
             <button
               type="button"
               onClick={logout}
