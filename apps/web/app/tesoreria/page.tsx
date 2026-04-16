@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { SectionCard } from '../../components/section-card';
 import { api } from '../../lib/api';
 
@@ -108,6 +108,10 @@ function debtBadgeClasses(color: 'gray' | 'green' | 'yellow' | 'red') {
   return 'border-slate-200 bg-slate-50 text-slate-700';
 }
 
+function memberDisplayName(member: Member) {
+  return `${member.lastName}, ${member.firstName} — ${member.matricula}`;
+}
+
 export default function TreasuryPage() {
   const [tab, setTab] = useState<'pagos' | 'caja'>('pagos');
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -131,6 +135,10 @@ export default function TreasuryPage() {
   const [error, setError] = useState('');
   const [errorCash, setErrorCash] = useState('');
   const [errorRate, setErrorRate] = useState('');
+
+  const [memberSearch, setMemberSearch] = useState('');
+  const [memberDropdownOpen, setMemberDropdownOpen] = useState(false);
+  const memberDropdownRef = useRef<HTMLDivElement | null>(null);
 
   const [form, setForm] = useState({
     memberId: '',
@@ -168,7 +176,15 @@ export default function TreasuryPage() {
     ]);
 
     setPayments(p);
-    setMembers(m);
+    setMembers(
+      [...m].sort((a, b) =>
+        `${a.lastName} ${a.firstName}`.localeCompare(
+          `${b.lastName} ${b.firstName}`,
+          'es',
+          { sensitivity: 'base' },
+        ),
+      ),
+    );
     setCashData(c);
     setRates(r);
 
@@ -183,6 +199,20 @@ export default function TreasuryPage() {
     loadAll().finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        memberDropdownRef.current &&
+        !memberDropdownRef.current.contains(event.target as Node)
+      ) {
+        setMemberDropdownOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const selectedMember = useMemo(
     () => members.find((m) => m.id === form.memberId) ?? null,
     [members, form.memberId],
@@ -192,6 +222,18 @@ export default function TreasuryPage() {
     if (!selectedMember) return null;
     return rates.find((r) => r.category === selectedMember.category) ?? null;
   }, [rates, selectedMember]);
+
+  const filteredMembers = useMemo(() => {
+    const query = memberSearch.trim().toLowerCase();
+
+    if (!query) {
+      return members;
+    }
+
+    return members.filter((member) =>
+      memberDisplayName(member).toLowerCase().includes(query),
+    );
+  }, [members, memberSearch]);
 
   useEffect(() => {
     if (!selectedMember) {
@@ -207,6 +249,12 @@ export default function TreasuryPage() {
       amount: selectedRate ? String(selectedRate.amount) : '',
     }));
   }, [selectedMember?.id, selectedMember?.category, selectedRate?.amount]);
+
+  useEffect(() => {
+    if (selectedMember) {
+      setMemberSearch(memberDisplayName(selectedMember));
+    }
+  }, [selectedMember]);
 
   useEffect(() => {
     if (!form.memberId) {
@@ -235,6 +283,12 @@ export default function TreasuryPage() {
       ) ?? null
     );
   }, [form.memberId, form.period, payments]);
+
+  function handleSelectMember(member: Member) {
+    setForm((prev) => ({ ...prev, memberId: member.id }));
+    setMemberSearch(memberDisplayName(member));
+    setMemberDropdownOpen(false);
+  }
 
   async function handlePayment(e: React.FormEvent) {
     e.preventDefault();
@@ -270,6 +324,7 @@ export default function TreasuryPage() {
         methodCode: 'EFECTIVO',
         notes: '',
       });
+      setMemberSearch('');
       setMemberStatement(null);
 
       const [p, c] = await Promise.all([
@@ -392,25 +447,45 @@ export default function TreasuryPage() {
             description="El monto se carga automáticamente según la categoría del socio, pero puede ajustarse manualmente para beneficios excepcionales."
           >
             <form onSubmit={handlePayment} className="grid gap-4 md:grid-cols-2">
-              <div className="md:col-span-2">
+              <div className="md:col-span-2" ref={memberDropdownRef}>
                 <label className="mb-2 block text-sm font-medium text-ink/80">
-                  Socio
+                  H.·.
                 </label>
-                <select
-                  value={form.memberId}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, memberId: e.target.value }))
-                  }
-                  required
-                  className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
-                >
-                  <option value="">Seleccionar socio</option>
-                  {members.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.matricula} — {m.lastName}, {m.firstName}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <input
+                    value={memberSearch}
+                    onChange={(e) => {
+                      setMemberSearch(e.target.value);
+                      setMemberDropdownOpen(true);
+                      setForm((prev) => ({ ...prev, memberId: '' }));
+                    }}
+                    onFocus={() => setMemberDropdownOpen(true)}
+                    placeholder="Buscar por apellido, nombre o matrícula"
+                    required
+                    className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                  />
+
+                  {memberDropdownOpen && (
+                    <div className="absolute z-20 mt-2 max-h-72 w-full overflow-y-auto rounded-2xl border border-ink/10 bg-white shadow-lg">
+                      {filteredMembers.length === 0 ? (
+                        <div className="px-4 py-3 text-sm text-ink/60">
+                          Sin resultados.
+                        </div>
+                      ) : (
+                        filteredMembers.map((member) => (
+                          <button
+                            key={member.id}
+                            type="button"
+                            onClick={() => handleSelectMember(member)}
+                            className="block w-full border-b border-ink/5 px-4 py-3 text-left text-sm text-ink hover:bg-ink/5 last:border-b-0"
+                          >
+                            {memberDisplayName(member)}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {memberStatement && (
@@ -568,7 +643,7 @@ export default function TreasuryPage() {
               <div className="md:col-span-2">
                 <button
                   type="submit"
-                  disabled={saving || Boolean(duplicateMonthPayment)}
+                  disabled={saving || Boolean(duplicateMonthPayment) || !form.memberId}
                   className="rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
                 >
                   {saving ? 'Registrando...' : 'Registrar pago'}
