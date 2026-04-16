@@ -7,9 +7,9 @@ import { useAuth } from '../context/auth';
 
 const navigation: Array<{ label: string; href: Route }> = [
   { label: 'Dashboard', href: '/' },
-  { label: 'Caja', href: '/caja' },
-  { label: 'Socios', href: '/socios' },
+  { label: 'Cuadro', href: '/socios' },
   { label: 'Tesoreria', href: '/tesoreria' },
+  { label: 'Caja', href: '/caja' },
   { label: 'Reportes', href: '/reportes' },
   { label: 'Mensajeria', href: '/mensajeria' },
   { label: 'Auditoria', href: '/auditoria' },
