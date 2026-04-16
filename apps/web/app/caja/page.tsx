@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { SectionCard } from '../../components/section-card';
+import { useAuth } from '../../context/auth';
 import { api } from '../../lib/api';
 
 type CashTransaction = {
@@ -105,6 +106,8 @@ function isWithinDateRange(
 }
 
 export default function CajaPage() {
+  const { canEdit } = useAuth();
+
   const [summary, setSummary] = useState<CashSummary | null>(null);
   const [groupMode, setGroupMode] = useState<GroupMode>('month');
   const [loading, setLoading] = useState(true);
@@ -196,6 +199,8 @@ export default function CajaPage() {
 
   async function handleCorrection(e: React.FormEvent) {
     e.preventDefault();
+    if (!canEdit) return;
+
     setError('');
     setSavingCorrection(true);
 
@@ -371,7 +376,7 @@ export default function CajaPage() {
               </div>
             )}
 
-            <div className="mt-6 grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
+            <div className={`mt-6 grid gap-6 ${canEdit ? 'xl:grid-cols-[1.3fr_0.7fr]' : ''}`}>
               <div className="space-y-4">
                 {groupedTransactions.length === 0 ? (
                   <div className="rounded-2xl border border-ink/10 bg-white p-6 text-sm text-ink/60">
@@ -446,88 +451,90 @@ export default function CajaPage() {
                 )}
               </div>
 
-              <SectionCard
-                title="Corrección de caja"
-                description="Ingresá el valor real para que el sistema agregue automáticamente un movimiento de corrección de caja."
-              >
-                <form onSubmit={handleCorrection} className="space-y-4">
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-ink/80">
-                      Saldo teórico actual
-                    </label>
-                    <input
-                      value={summary ? fmtMoney(summary.balance) : ''}
-                      readOnly
-                      className="w-full rounded-2xl border border-ink/10 bg-ink/5 px-4 py-3 text-sm"
-                    />
-                  </div>
+              {canEdit && (
+                <SectionCard
+                  title="Corrección de caja"
+                  description="Ingresá el valor real para que el sistema agregue automáticamente un movimiento de corrección de caja."
+                >
+                  <form onSubmit={handleCorrection} className="space-y-4">
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-ink/80">
+                        Saldo teórico actual
+                      </label>
+                      <input
+                        value={summary ? fmtMoney(summary.balance) : ''}
+                        readOnly
+                        className="w-full rounded-2xl border border-ink/10 bg-ink/5 px-4 py-3 text-sm"
+                      />
+                    </div>
 
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-ink/80">
-                      Valor real
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={correctionForm.actualBalance}
-                      onChange={(e) =>
-                        setCorrectionForm((prev) => ({
-                          ...prev,
-                          actualBalance: e.target.value,
-                        }))
-                      }
-                      required
-                      className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
-                    />
-                  </div>
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-ink/80">
+                        Valor real
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={correctionForm.actualBalance}
+                        onChange={(e) =>
+                          setCorrectionForm((prev) => ({
+                            ...prev,
+                            actualBalance: e.target.value,
+                          }))
+                        }
+                        required
+                        className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                      />
+                    </div>
 
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-ink/80">
-                      Fecha
-                    </label>
-                    <input
-                      type="date"
-                      value={correctionForm.occurredAt}
-                      onChange={(e) =>
-                        setCorrectionForm((prev) => ({
-                          ...prev,
-                          occurredAt: e.target.value,
-                        }))
-                      }
-                      required
-                      className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
-                    />
-                  </div>
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-ink/80">
+                        Fecha
+                      </label>
+                      <input
+                        type="date"
+                        value={correctionForm.occurredAt}
+                        onChange={(e) =>
+                          setCorrectionForm((prev) => ({
+                            ...prev,
+                            occurredAt: e.target.value,
+                          }))
+                        }
+                        required
+                        className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                      />
+                    </div>
 
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-ink/80">
-                      Nota
-                    </label>
-                    <textarea
-                      value={correctionForm.notes}
-                      onChange={(e) =>
-                        setCorrectionForm((prev) => ({
-                          ...prev,
-                          notes: e.target.value,
-                        }))
-                      }
-                      rows={4}
-                      className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
-                      placeholder="Observación opcional"
-                    />
-                  </div>
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-ink/80">
+                        Nota
+                      </label>
+                      <textarea
+                        value={correctionForm.notes}
+                        onChange={(e) =>
+                          setCorrectionForm((prev) => ({
+                            ...prev,
+                            notes: e.target.value,
+                          }))
+                        }
+                        rows={4}
+                        className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                        placeholder="Observación opcional"
+                      />
+                    </div>
 
-                  <button
-                    type="submit"
-                    disabled={savingCorrection}
-                    className="w-full rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
-                  >
-                    {savingCorrection
-                      ? 'Registrando...'
-                      : 'Registrar corrección de caja'}
-                  </button>
-                </form>
-              </SectionCard>
+                    <button
+                      type="submit"
+                      disabled={savingCorrection}
+                      className="w-full rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
+                    >
+                      {savingCorrection
+                        ? 'Registrando...'
+                        : 'Registrar corrección de caja'}
+                    </button>
+                  </form>
+                </SectionCard>
+              )}
             </div>
           </>
         )}
