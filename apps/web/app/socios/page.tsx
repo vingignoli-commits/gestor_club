@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { SectionCard } from '../../components/section-card';
+import { useAuth } from '../../context/auth';
 import { api } from '../../lib/api';
 
 type Member = {
@@ -141,6 +142,8 @@ function compareValues(a: string, b: string, direction: SortDirection) {
 }
 
 export default function MembersPage() {
+  const { canEdit } = useAuth();
+
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -173,6 +176,7 @@ export default function MembersPage() {
   }, []);
 
   function openCreate() {
+    if (!canEdit) return;
     setEditingMemberId(null);
     setForm(emptyForm());
     setError('');
@@ -180,6 +184,7 @@ export default function MembersPage() {
   }
 
   function openEdit(member: Member) {
+    if (!canEdit) return;
     setEditingMemberId(member.id);
     setForm({
       matricula: member.matricula,
@@ -228,6 +233,8 @@ export default function MembersPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!canEdit) return;
+
     setError('');
     setSaving(true);
 
@@ -381,7 +388,7 @@ export default function MembersPage() {
     <div className="space-y-6">
       <SectionCard
         title="Cuadro del Taller"
-        description="Alta, edición, filtrado y orden del Cuadro del Taller."
+        description="Consulta, filtrado y orden del Cuadro del Taller."
       >
         <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
@@ -402,15 +409,17 @@ export default function MembersPage() {
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-end">
-          <button
-            type="button"
-            onClick={openCreate}
-            className="rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-white"
-          >
-            + Nuevo H.·.
-          </button>
-        </div>
+        {canEdit && (
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-end">
+            <button
+              type="button"
+              onClick={openCreate}
+              className="rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-white"
+            >
+              + Nuevo H.·.
+            </button>
+          </div>
+        )}
 
         {activeFilters.length > 0 && (
           <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -509,7 +518,7 @@ export default function MembersPage() {
                       Nacimiento {sortIndicator('birthDate')}
                     </button>
                   </th>
-                  <th className="px-3 py-2">Acciones</th>
+                  {canEdit && <th className="px-3 py-2">Acciones</th>}
                 </tr>
 
                 <tr className="text-left text-xs text-ink/60">
@@ -596,7 +605,7 @@ export default function MembersPage() {
                     </select>
                   </th>
                   <th className="px-3 py-2" />
-                  <th className="px-3 py-2" />
+                  {canEdit && <th className="px-3 py-2" />}
                 </tr>
               </thead>
               <tbody>
@@ -637,15 +646,17 @@ export default function MembersPage() {
                           ? new Date(m.birthDate).toLocaleDateString('es-AR')
                           : '-'}
                       </td>
-                      <td className="rounded-r-2xl px-3 py-3">
-                        <button
-                          type="button"
-                          onClick={() => openEdit(m)}
-                          className="rounded-xl border border-ink/10 px-3 py-2 text-xs font-semibold"
-                        >
-                          Editar
-                        </button>
-                      </td>
+                      {canEdit && (
+                        <td className="rounded-r-2xl px-3 py-3">
+                          <button
+                            type="button"
+                            onClick={() => openEdit(m)}
+                            className="rounded-xl border border-ink/10 px-3 py-2 text-xs font-semibold"
+                          >
+                            Editar
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -655,7 +666,7 @@ export default function MembersPage() {
         )}
       </SectionCard>
 
-      {showForm && (
+      {canEdit && showForm && (
         <SectionCard
           title={isEditing ? 'Editar H.·.' : 'Nuevo H.·.'}
           description="Los valores posibles de grado son Aprendiz, Compañero y Maestro."
