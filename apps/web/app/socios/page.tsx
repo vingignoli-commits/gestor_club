@@ -380,8 +380,8 @@ export default function MembersPage() {
   return (
     <div className="space-y-6">
       <SectionCard
-        title="HH.·."
-        description="Alta, edición, filtrado y orden del padrón de HH.·."
+        title="Cuadro del Taller"
+        description="Alta, edición, filtrado y orden del Cuadro del Taller."
       >
         <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
@@ -427,7 +427,7 @@ export default function MembersPage() {
         )}
 
         {loading ? (
-          <div className="py-8 text-sm text-ink/60">Cargando HH.·....</div>
+          <div className="py-8 text-sm text-ink/60">Cargando Cuadro del Taller...</div>
         ) : filteredMembers.length === 0 ? (
           <div className="py-8 text-sm text-ink/60">
             No se encontraron HH.·. con los filtros actuales.
