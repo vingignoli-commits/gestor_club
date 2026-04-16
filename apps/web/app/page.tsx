@@ -73,30 +73,61 @@ function gradeLabel(value: string) {
   return labels[value] ?? value;
 }
 
+function gaugeColor(value: number) {
+  if (value >= 50) return '#ef4444';
+  if (value >= 25) return '#f59e0b';
+  return '#10b981';
+}
+
 function Gauge({ value }: { value: number }) {
   const safeValue = Math.max(0, Math.min(100, value));
-  const angle = -90 + (safeValue / 100) * 180;
-  const radians = (angle * Math.PI) / 180;
+  const pointerAngle = -90 + (safeValue / 100) * 180;
+  const radians = (pointerAngle * Math.PI) / 180;
   const pointerX = 100 + 60 * Math.cos(radians);
   const pointerY = 100 + 60 * Math.sin(radians);
+  const valueColor = gaugeColor(safeValue);
 
   return (
-    <svg viewBox="0 0 200 120" className="h-40 w-full">
+    <svg viewBox="0 0 200 120" className="h-44 w-full">
       <path
-        d="M 20 100 A 80 80 0 0 1 180 100"
+        d="M 20 100 A 80 80 0 0 1 60 30"
         fill="none"
-        stroke="#e5e7eb"
+        stroke="#10b981"
         strokeWidth="18"
         strokeLinecap="round"
       />
       <path
-        d="M 20 100 A 80 80 0 0 1 180 100"
+        d="M 60 30 A 80 80 0 0 1 100 20"
+        fill="none"
+        stroke="#10b981"
+        strokeWidth="18"
+        strokeLinecap="round"
+      />
+      <path
+        d="M 100 20 A 80 80 0 0 1 140 30"
+        fill="none"
+        stroke="#f59e0b"
+        strokeWidth="18"
+        strokeLinecap="round"
+      />
+      <path
+        d="M 140 30 A 80 80 0 0 1 180 100"
         fill="none"
         stroke="#ef4444"
         strokeWidth="18"
         strokeLinecap="round"
-        strokeDasharray={`${(safeValue / 100) * 251.2} 251.2`}
       />
+
+      <path
+        d="M 20 100 A 80 80 0 0 1 180 100"
+        fill="none"
+        stroke={valueColor}
+        strokeWidth="8"
+        strokeLinecap="round"
+        pathLength={100}
+        strokeDasharray={`${safeValue} 100`}
+      />
+
       <line
         x1="100"
         y1="100"
@@ -107,13 +138,44 @@ function Gauge({ value }: { value: number }) {
         strokeLinecap="round"
       />
       <circle cx="100" cy="100" r="8" fill="#111827" />
+
       <text
         x="100"
-        y="40"
+        y="48"
         textAnchor="middle"
-        className="fill-current text-sm font-semibold text-ink"
+        fontSize="18"
+        fontWeight="700"
+        fill={valueColor}
       >
         {safeValue.toFixed(1)}%
+      </text>
+
+      <text
+        x="20"
+        y="114"
+        textAnchor="start"
+        fontSize="10"
+        fill="#10b981"
+      >
+        0%
+      </text>
+      <text
+        x="100"
+        y="12"
+        textAnchor="middle"
+        fontSize="10"
+        fill="#f59e0b"
+      >
+        50%
+      </text>
+      <text
+        x="180"
+        y="114"
+        textAnchor="end"
+        fontSize="10"
+        fill="#ef4444"
+      >
+        100%
       </text>
     </svg>
   );
@@ -147,14 +209,14 @@ export default function HomePage() {
   return (
     <div className="space-y-6">
       <SectionCard
-        title="Gestión de HH.·."
+        title="Gestion de HH.·."
         description="Indicadores principales de composición, actividad y cumpleaños."
       >
         {loading || !data ? (
           <div className="py-8 text-sm text-ink/60">Cargando dashboard...</div>
         ) : (
           <div className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-5">
+            <div className="grid gap-4 md:grid-cols-3">
               <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
                 <div className="text-xs uppercase tracking-wide text-ink/50">
                   Cantidad total
@@ -166,7 +228,7 @@ export default function HomePage() {
 
               <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
                 <div className="text-xs uppercase tracking-wide text-ink/50">
-                  H.·. activos
+                  Cantidad de HH.·. activos
                 </div>
                 <div className="mt-2 text-3xl font-bold text-ink">
                   {data.people.activeMembers}
@@ -175,7 +237,7 @@ export default function HomePage() {
 
               <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
                 <div className="text-xs uppercase tracking-wide text-ink/50">
-                  Edad promedio
+                  Edad promedio de HH.·.
                 </div>
                 <div className="mt-2 text-3xl font-bold text-ink">
                   {data.people.averageAge > 0
@@ -183,30 +245,12 @@ export default function HomePage() {
                     : '-'}
                 </div>
               </div>
-
-              <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
-                <div className="text-xs uppercase tracking-wide text-ink/50">
-                  Categorías
-                </div>
-                <div className="mt-2 text-3xl font-bold text-ink">
-                  {data.people.byCategory.length}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
-                <div className="text-xs uppercase tracking-wide text-ink/50">
-                  Grados
-                </div>
-                <div className="mt-2 text-3xl font-bold text-ink">
-                  {data.people.byGrade.length}
-                </div>
-              </div>
             </div>
 
             <div className="grid gap-6 xl:grid-cols-3">
               <div className="rounded-2xl border border-ink/10 bg-white p-4">
                 <div className="mb-4 text-lg font-semibold text-ink">
-                  HH.·. por categoría
+                  Cantidad de HH.·. por categoria
                 </div>
                 <div className="space-y-3">
                   {sortedCategories.map((item) => (
@@ -227,7 +271,7 @@ export default function HomePage() {
 
               <div className="rounded-2xl border border-ink/10 bg-white p-4">
                 <div className="mb-4 text-lg font-semibold text-ink">
-                  HH.·. por grado
+                  Cantidad de HH.·. por grado
                 </div>
                 <div className="space-y-3">
                   {sortedGrades.map((item) => (
@@ -246,7 +290,7 @@ export default function HomePage() {
 
               <div className="rounded-2xl border border-ink/10 bg-white p-4">
                 <div className="mb-4 text-lg font-semibold text-ink">
-                  Cumpleaños del mes
+                  Cumpleaños de HH.·.
                 </div>
                 {birthdays.length === 0 ? (
                   <div className="text-sm text-ink/60">
@@ -287,7 +331,7 @@ export default function HomePage() {
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
               <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
                 <div className="text-xs uppercase tracking-wide text-ink/50">
-                  Saldo caja
+                  Saldo Caja
                 </div>
                 <div className="mt-2 text-2xl font-bold text-ink">
                   {fmtMoney(data.accounting.cashBalance)}
@@ -296,7 +340,7 @@ export default function HomePage() {
 
               <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
                 <div className="text-xs uppercase tracking-wide text-ink/50">
-                  Recaudación mes actual
+                  Recaudación del mes actual
                 </div>
                 <div className="mt-2 text-2xl font-bold text-ink">
                   {fmtMoney(data.accounting.currentMonthCollection)}
@@ -305,7 +349,7 @@ export default function HomePage() {
 
               <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
                 <div className="text-xs uppercase tracking-wide text-ink/50">
-                  Flujo caja operativo
+                  Flujo de caja operativo
                 </div>
                 <div className="mt-2 text-2xl font-bold text-ink">
                   {fmtMoney(data.accounting.operatingCashFlow)}
@@ -314,7 +358,7 @@ export default function HomePage() {
 
               <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
                 <div className="text-xs uppercase tracking-wide text-ink/50">
-                  Total deudas a la fecha
+                  Total de deudas a la fecha
                 </div>
                 <div className="mt-2 text-2xl font-bold text-ink">
                   {fmtMoney(data.accounting.totalDebtToDate)}
@@ -340,6 +384,11 @@ export default function HomePage() {
                   Porcentaje de cuotas del mes actual no cobradas después del día 5.
                 </div>
                 <Gauge value={data.accounting.delinquencyIndex} />
+                <div className="mt-2 flex justify-between text-xs font-semibold">
+                  <span className="text-emerald-600">0-25% verde</span>
+                  <span className="text-amber-500">25-50% amarillo</span>
+                  <span className="text-rose-600">50-100% rojo</span>
+                </div>
               </div>
 
               <div className="rounded-2xl border border-ink/10 bg-white p-4">
