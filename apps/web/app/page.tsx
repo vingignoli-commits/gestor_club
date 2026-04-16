@@ -73,111 +73,146 @@ function gradeLabel(value: string) {
   return labels[value] ?? value;
 }
 
-function gaugeColor(value: number) {
-  if (value >= 50) return '#ef4444';
-  if (value >= 25) return '#f59e0b';
-  return '#10b981';
+function gaugeTone(value: number) {
+  if (value >= 50) {
+    return {
+      color: '#dc2626',
+      bg: 'bg-rose-50',
+      text: 'text-rose-700',
+      label: 'Alta',
+    };
+  }
+
+  if (value >= 25) {
+    return {
+      color: '#d97706',
+      bg: 'bg-amber-50',
+      text: 'text-amber-700',
+      label: 'Media',
+    };
+  }
+
+  return {
+    color: '#059669',
+    bg: 'bg-emerald-50',
+    text: 'text-emerald-700',
+    label: 'Baja',
+  };
 }
 
 function Gauge({ value }: { value: number }) {
   const safeValue = Math.max(0, Math.min(100, value));
-  const pointerAngle = -90 + (safeValue / 100) * 180;
-  const radians = (pointerAngle * Math.PI) / 180;
-  const pointerX = 100 + 60 * Math.cos(radians);
-  const pointerY = 100 + 60 * Math.sin(radians);
-  const valueColor = gaugeColor(safeValue);
+  const tone = gaugeTone(safeValue);
+
+  const centerX = 110;
+  const centerY = 120;
+  const radius = 82;
+
+  const pointerAngle = -180 + (safeValue / 100) * 180;
+  const pointerRadians = (pointerAngle * Math.PI) / 180;
+
+  const pointerX = centerX + radius * 0.78 * Math.cos(pointerRadians);
+  const pointerY = centerY + radius * 0.78 * Math.sin(pointerRadians);
+
+  const progressLength = 100;
+  const dash = safeValue;
+  const arcPath = `
+    M ${centerX - radius} ${centerY}
+    A ${radius} ${radius} 0 0 1 ${centerX + radius} ${centerY}
+  `;
 
   return (
-    <svg viewBox="0 0 200 120" className="h-44 w-full">
-      <path
-        d="M 20 100 A 80 80 0 0 1 60 30"
-        fill="none"
-        stroke="#10b981"
-        strokeWidth="18"
-        strokeLinecap="round"
-      />
-      <path
-        d="M 60 30 A 80 80 0 0 1 100 20"
-        fill="none"
-        stroke="#10b981"
-        strokeWidth="18"
-        strokeLinecap="round"
-      />
-      <path
-        d="M 100 20 A 80 80 0 0 1 140 30"
-        fill="none"
-        stroke="#f59e0b"
-        strokeWidth="18"
-        strokeLinecap="round"
-      />
-      <path
-        d="M 140 30 A 80 80 0 0 1 180 100"
-        fill="none"
-        stroke="#ef4444"
-        strokeWidth="18"
-        strokeLinecap="round"
-      />
+    <div className="rounded-3xl border border-ink/10 bg-white p-5 shadow-sm">
+      <svg viewBox="0 0 220 145" className="mx-auto h-48 w-full max-w-sm">
+        <defs>
+          <linearGradient id="gaugeBase" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#10b981" />
+            <stop offset="50%" stopColor="#f59e0b" />
+            <stop offset="100%" stopColor="#ef4444" />
+          </linearGradient>
+        </defs>
 
-      <path
-        d="M 20 100 A 80 80 0 0 1 180 100"
-        fill="none"
-        stroke={valueColor}
-        strokeWidth="8"
-        strokeLinecap="round"
-        pathLength={100}
-        strokeDasharray={`${safeValue} 100`}
-      />
+        <path
+          d={arcPath}
+          fill="none"
+          stroke="#e5e7eb"
+          strokeWidth="18"
+          strokeLinecap="round"
+          pathLength={progressLength}
+        />
 
-      <line
-        x1="100"
-        y1="100"
-        x2={pointerX}
-        y2={pointerY}
-        stroke="#111827"
-        strokeWidth="6"
-        strokeLinecap="round"
-      />
-      <circle cx="100" cy="100" r="8" fill="#111827" />
+        <path
+          d={arcPath}
+          fill="none"
+          stroke="url(#gaugeBase)"
+          strokeWidth="18"
+          strokeLinecap="round"
+          pathLength={progressLength}
+          strokeDasharray={`${dash} ${progressLength}`}
+        />
 
-      <text
-        x="100"
-        y="48"
-        textAnchor="middle"
-        fontSize="18"
-        fontWeight="700"
-        fill={valueColor}
-      >
-        {safeValue.toFixed(1)}%
-      </text>
+        <line
+          x1={centerX}
+          y1={centerY}
+          x2={pointerX}
+          y2={pointerY}
+          stroke="#111827"
+          strokeWidth="5"
+          strokeLinecap="round"
+        />
+        <circle cx={centerX} cy={centerY} r="8" fill="#111827" />
 
-      <text
-        x="20"
-        y="114"
-        textAnchor="start"
-        fontSize="10"
-        fill="#10b981"
+        <text
+          x={centerX}
+          y="64"
+          textAnchor="middle"
+          fontSize="26"
+          fontWeight="700"
+          fill={tone.color}
+        >
+          {safeValue.toFixed(1)}%
+        </text>
+
+        <text
+          x={centerX}
+          y="84"
+          textAnchor="middle"
+          fontSize="12"
+          fontWeight="600"
+          fill="#6b7280"
+        >
+          Índice actual
+        </text>
+
+        <text x="22" y="128" textAnchor="start" fontSize="11" fill="#059669">
+          0%
+        </text>
+        <text x={centerX} y="18" textAnchor="middle" fontSize="11" fill="#d97706">
+          50%
+        </text>
+        <text x="198" y="128" textAnchor="end" fontSize="11" fill="#dc2626">
+          100%
+        </text>
+      </svg>
+
+      <div className="mt-2 grid grid-cols-3 gap-2 text-center text-xs font-semibold">
+        <div className="rounded-2xl bg-emerald-50 px-3 py-2 text-emerald-700">
+          0–25% Baja
+        </div>
+        <div className="rounded-2xl bg-amber-50 px-3 py-2 text-amber-700">
+          25–50% Media
+        </div>
+        <div className="rounded-2xl bg-rose-50 px-3 py-2 text-rose-700">
+          50–100% Alta
+        </div>
+      </div>
+
+      <div
+        className={`mt-3 rounded-2xl px-3 py-2 text-center text-sm font-semibold ${tone.bg} ${tone.text}`}
       >
-        0%
-      </text>
-      <text
-        x="100"
-        y="12"
-        textAnchor="middle"
-        fontSize="10"
-        fill="#f59e0b"
-      >
-        50%
-      </text>
-      <text
-        x="180"
-        y="114"
-        textAnchor="end"
-        fontSize="10"
-        fill="#ef4444"
-      >
-        100%
-      </text>
-    </svg>
+        Morosidad {tone.label}
+      </div>
+    </div>
   );
 }
 
@@ -376,18 +411,15 @@ export default function HomePage() {
             </div>
 
             <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
-              <div className="rounded-2xl border border-ink/10 bg-white p-4">
+              <div>
                 <div className="mb-2 text-lg font-semibold text-ink">
                   Índice de Morosidad
                 </div>
                 <div className="text-sm text-ink/60">
                   Porcentaje de cuotas del mes actual no cobradas después del día 5.
                 </div>
-                <Gauge value={data.accounting.delinquencyIndex} />
-                <div className="mt-2 flex justify-between text-xs font-semibold">
-                  <span className="text-emerald-600">0-25% verde</span>
-                  <span className="text-amber-500">25-50% amarillo</span>
-                  <span className="text-rose-600">50-100% rojo</span>
+                <div className="mt-4">
+                  <Gauge value={data.accounting.delinquencyIndex} />
                 </div>
               </div>
 
