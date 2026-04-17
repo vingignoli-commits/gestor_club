@@ -813,8 +813,8 @@ export default function TreasuryPage() {
                 }
                 className="rounded-2xl border border-ink/10 px-4 py-3 text-sm"
               >
-                <option value="OTHER">Cuota GRAN LOGIA</option>
-                <option value="OTHER">Cuota Civil Armonía</option>
+                <option value="GRAN_LOGIA">Cuota GRAN LOGIA</option>
+                <option value="CIVIL_ARMONIA">Cuota Civil Armonía</option>
                 <option value="SUPPLIES">Insumos</option>
                 <option value="SERVICES">Servicios</option>
                 <option value="SALARY">Salario</option>
