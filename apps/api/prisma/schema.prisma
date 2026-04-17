@@ -40,6 +40,8 @@ enum IncomeType {
 }
 
 enum ExpenseType {
+  GRAN_LOGIA
+  CIVIL_ARMONIA
   SUPPLIES
   SERVICES
   SALARY
