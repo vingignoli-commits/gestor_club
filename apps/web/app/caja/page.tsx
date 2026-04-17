@@ -37,6 +37,8 @@ const INCOME_TYPE_LABELS: Record<string, string> = {
 };
 
 const EXPENSE_TYPE_LABELS: Record<string, string> = {
+  GRAN_LOGIA: 'Cuota GRAN LOGIA',
+  CIVIL_ARMONIA: 'Cuota Civil Armonía',
   SUPPLIES: 'Insumos',
   SERVICES: 'Servicios',
   SALARY: 'Salarios',
