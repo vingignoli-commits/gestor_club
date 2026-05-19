@@ -53,6 +53,15 @@ function fmt(n: number) {
   }).format(n);
 }
 
+function escapeHtml(value: string | number | null | undefined) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
 const CATEGORY_LABELS: Record<string, string> = {
   SIMPLE: 'Simple',
   DOBLE: 'Doble',
@@ -131,27 +140,320 @@ export default function ReportsPage() {
     );
   }, [categoryCalculationRows]);
 
+  function buildPdfHtml() {
+    const today = new Date().toLocaleDateString('es-AR');
+    const title =
+      tab === 'deudores'
+        ? 'Reporte de socios deudores'
+        : tab === 'recaudacion'
+          ? 'Reporte de recaudación mensual'
+          : 'Reporte de socios por categoría';
+
+    const styles = `
+      <style>
+        body {
+          font-family: Arial, sans-serif;
+          color: #111827;
+          padding: 32px;
+        }
+        h1 {
+          font-size: 24px;
+          margin: 0 0 4px;
+        }
+        .meta {
+          color: #6b7280;
+          font-size: 12px;
+          margin-bottom: 24px;
+        }
+        .summary {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 12px;
+          margin-bottom: 24px;
+        }
+        .box {
+          border: 1px solid #e5e7eb;
+          border-radius: 12px;
+          padding: 12px;
+        }
+        .box-label {
+          color: #6b7280;
+          font-size: 11px;
+          text-transform: uppercase;
+          margin-bottom: 6px;
+        }
+        .box-value {
+          font-size: 20px;
+          font-weight: 700;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-top: 12px;
+          font-size: 12px;
+        }
+        th {
+          text-align: left;
+          background: #f3f4f6;
+          border: 1px solid #e5e7eb;
+          padding: 8px;
+        }
+        td {
+          border: 1px solid #e5e7eb;
+          padding: 8px;
+          vertical-align: top;
+        }
+        .section-title {
+          font-size: 16px;
+          font-weight: 700;
+          margin-top: 24px;
+        }
+        @page {
+          size: A4;
+          margin: 14mm;
+        }
+      </style>
+    `;
+
+    if (tab === 'deudores') {
+      const rows = debtors
+        .map(
+          (debtor) => `
+            <tr>
+              <td>${escapeHtml(debtor.lastName)}, ${escapeHtml(debtor.firstName)}</td>
+              <td>${escapeHtml(debtor.matricula)}</td>
+              <td>${escapeHtml(CATEGORY_LABELS[debtor.category] ?? debtor.category)}</td>
+              <td>${escapeHtml(debtor.debtLevelLabel)}</td>
+              <td>${escapeHtml(debtor.monthsOwed)}</td>
+              <td>${escapeHtml(debtor.overdueMonthLabels.join(', ') || '-')}</td>
+              <td>${escapeHtml(fmt(debtor.debt))}</td>
+            </tr>
+          `,
+        )
+        .join('');
+
+      return `
+        <html>
+          <head><title>${title}</title>${styles}</head>
+          <body>
+            <h1>${title}</h1>
+            <div class="meta">Generado el ${today}</div>
+
+            <div class="summary">
+              <div class="box">
+                <div class="box-label">Socios deudores</div>
+                <div class="box-value">${debtors.length}</div>
+              </div>
+              <div class="box">
+                <div class="box-label">Deuda total estimada</div>
+                <div class="box-value">${fmt(totalDebt)}</div>
+              </div>
+              <div class="box">
+                <div class="box-label">Reporte</div>
+                <div class="box-value">Deudores</div>
+              </div>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>Socio</th>
+                  <th>Matrícula</th>
+                  <th>Categoría</th>
+                  <th>Nivel deuda</th>
+                  <th>Meses adeudados</th>
+                  <th>Meses vencidos</th>
+                  <th>Deuda total</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </body>
+        </html>
+      `;
+    }
+
+    if (tab === 'recaudacion') {
+      const rows = monthly
+        .map(
+          (item) => `
+            <tr>
+              <td>${escapeHtml(item.month)}</td>
+              <td>${escapeHtml(fmt(item.total))}</td>
+            </tr>
+          `,
+        )
+        .join('');
+
+      return `
+        <html>
+          <head><title>${title}</title>${styles}</head>
+          <body>
+            <h1>${title}</h1>
+            <div class="meta">Generado el ${today}</div>
+
+            <div class="summary">
+              <div class="box">
+                <div class="box-label">Total recaudado</div>
+                <div class="box-value">${fmt(totalCollected)}</div>
+              </div>
+              <div class="box">
+                <div class="box-label">Periodos</div>
+                <div class="box-value">${monthly.length}</div>
+              </div>
+              <div class="box">
+                <div class="box-label">Reporte</div>
+                <div class="box-value">Recaudación</div>
+              </div>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>Mes</th>
+                  <th>Total recaudado</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </body>
+        </html>
+      `;
+    }
+
+    const categoryRows = categories
+      .map(
+        (category) => `
+          <tr>
+            <td>${escapeHtml(CATEGORY_LABELS[category.category] ?? category.category)}</td>
+            <td>${escapeHtml(category.active)}</td>
+            <td>${escapeHtml(category.inactive)}</td>
+            <td>${escapeHtml(category.total)}</td>
+          </tr>
+        `,
+      )
+      .join('');
+
+    const projectionRows = categoryCalculationRows
+      .map(
+        (row) => `
+          <tr>
+            <td>${escapeHtml(CATEGORY_LABELS[row.category] ?? row.category)}</td>
+            <td>${escapeHtml(row.activeMembers)}</td>
+            <td>${escapeHtml(fmt(row.unitValue))}</td>
+            <td>${escapeHtml(fmt(row.totalValue))}</td>
+          </tr>
+        `,
+      )
+      .join('');
+
+    return `
+      <html>
+        <head><title>${title}</title>${styles}</head>
+        <body>
+          <h1>${title}</h1>
+          <div class="meta">Generado el ${today}</div>
+
+          <div class="summary">
+            <div class="box">
+              <div class="box-label">Categorías</div>
+              <div class="box-value">${categories.length}</div>
+            </div>
+            <div class="box">
+              <div class="box-label">Total proyección</div>
+              <div class="box-value">${fmt(totalCategoryProjection)}</div>
+            </div>
+            <div class="box">
+              <div class="box-label">Reporte</div>
+              <div class="box-value">Categorías</div>
+            </div>
+          </div>
+
+          <div class="section-title">Socios por categoría</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Categoría</th>
+                <th>Activos</th>
+                <th>Inactivos</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>${categoryRows}</tbody>
+          </table>
+
+          <div class="section-title">Cálculo por valor unitario</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Categoría</th>
+                <th>Socios activos</th>
+                <th>Valor unitario</th>
+                <th>Resultado</th>
+              </tr>
+            </thead>
+            <tbody>${projectionRows}</tbody>
+            <tfoot>
+              <tr>
+                <td colspan="3"><strong>Total general</strong></td>
+                <td><strong>${fmt(totalCategoryProjection)}</strong></td>
+              </tr>
+            </tfoot>
+          </table>
+        </body>
+      </html>
+    `;
+  }
+
+  function downloadPdf() {
+    const printWindow = window.open('', '_blank');
+
+    if (!printWindow) {
+      return;
+    }
+
+    printWindow.document.open();
+    printWindow.document.write(buildPdfHtml());
+    printWindow.document.close();
+
+    printWindow.onload = () => {
+      printWindow.focus();
+      printWindow.print();
+    };
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex gap-3">
-        {(['deudores', 'recaudacion', 'categorias'] as const).map((tabKey) => (
-          <button
-            key={tabKey}
-            type="button"
-            onClick={() => setTab(tabKey)}
-            className={`rounded-2xl px-5 py-3 text-sm font-semibold capitalize transition ${
-              tab === tabKey
-                ? 'bg-accent text-white'
-                : 'bg-ink/10 text-ink/70 hover:bg-ink/20'
-            }`}
-          >
-            {tabKey === 'deudores'
-              ? 'Socios deudores'
-              : tabKey === 'recaudacion'
-                ? 'Recaudación'
-                : 'Por categoría'}
-          </button>
-        ))}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap gap-3">
+          {(['deudores', 'recaudacion', 'categorias'] as const).map((tabKey) => (
+            <button
+              key={tabKey}
+              type="button"
+              onClick={() => setTab(tabKey)}
+              className={`rounded-2xl px-5 py-3 text-sm font-semibold capitalize transition ${
+                tab === tabKey
+                  ? 'bg-accent text-white'
+                  : 'bg-ink/10 text-ink/70 hover:bg-ink/20'
+              }`}
+            >
+              {tabKey === 'deudores'
+                ? 'Socios deudores'
+                : tabKey === 'recaudacion'
+                  ? 'Recaudación'
+                  : 'Por categoría'}
+            </button>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={downloadPdf}
+          disabled={loading}
+          className="rounded-2xl border border-ink/10 bg-white px-5 py-3 text-sm font-semibold text-ink hover:bg-ink/5 disabled:opacity-60"
+        >
+          Descargar PDF
+        </button>
       </div>
 
       {loading ? (
