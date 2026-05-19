@@ -6,7 +6,14 @@
   color-scheme: light;
 }
 
+html {
+  min-width: 320px;
+  overflow-x: hidden;
+}
+
 body {
+  min-width: 320px;
+  overflow-x: hidden;
   background:
     radial-gradient(circle at top left, rgba(0, 122, 100, 0.08), transparent 30%),
     linear-gradient(180deg, #f7f1e8 0%, #f3eee6 100%);
@@ -17,3 +24,28 @@ body {
   box-sizing: border-box;
 }
 
+input,
+select,
+textarea,
+button {
+  min-width: 0;
+}
+
+table {
+  width: 100%;
+}
+
+th,
+td {
+  vertical-align: top;
+}
+
+@media (max-width: 640px) {
+  table {
+    min-width: 720px;
+  }
+
+  .grid {
+    min-width: 0;
+  }
+}

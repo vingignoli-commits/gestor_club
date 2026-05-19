@@ -20,7 +20,11 @@ const navigation: Array<{
   { label: 'Configuracion', href: '/configuracion', roles: ['ADMIN'] },
 ];
 
-export function Sidebar() {
+type SidebarProps = {
+  onNavigate?: () => void;
+};
+
+export function Sidebar({ onNavigate }: SidebarProps) {
   const { user, logout } = useAuth();
   const pathname = usePathname();
 
@@ -29,13 +33,17 @@ export function Sidebar() {
   );
 
   return (
-    <aside className="flex h-full w-72 flex-col border-r border-ink/10 bg-white px-5 py-6">
-      <div className="mb-8">
-        <div className="text-xl font-bold text-ink">R.·.L.·. PROGRESO Nº 100</div>
-        <div className="mt-1 text-sm text-ink/60">Administracion integral</div>
+    <aside className="flex h-full w-full flex-col border-r border-ink/10 bg-white px-4 py-5 sm:px-5 sm:py-6 lg:w-72">
+      <div className="mb-6">
+        <div className="text-lg font-bold leading-tight text-ink sm:text-xl">
+          R.·.L.·. PROGRESO Nº 100
+        </div>
+        <div className="mt-1 text-sm text-ink/60">
+          Administración integral
+        </div>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-2">
+      <nav className="flex flex-1 flex-col gap-2 overflow-y-auto pr-1">
         {items.map((item) => {
           const isActive = pathname === item.href;
 
@@ -43,6 +51,7 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={onNavigate}
               className={`rounded-2xl px-4 py-3 text-sm font-semibold transition ${
                 isActive
                   ? 'bg-accent text-white'
@@ -58,7 +67,9 @@ export function Sidebar() {
       <div className="mt-6 border-t border-ink/10 pt-4">
         {user ? (
           <div className="space-y-3">
-            <div className="text-sm font-semibold text-ink">{user.fullName}</div>
+            <div className="break-words text-sm font-semibold text-ink">
+              {user.fullName}
+            </div>
             <div className="text-xs uppercase tracking-wide text-ink/50">
               {user.role === 'ADMIN' ? 'Administrador' : 'Usuario general'}
             </div>
@@ -67,7 +78,7 @@ export function Sidebar() {
               onClick={logout}
               className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm font-semibold text-ink/75 hover:bg-ink/5 hover:text-ink"
             >
-              Cerrar sesion
+              Cerrar sesión
             </button>
           </div>
         ) : (

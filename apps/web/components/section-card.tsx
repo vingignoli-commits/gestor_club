@@ -15,16 +15,20 @@ export function SectionCard({
 }: SectionCardProps) {
   return (
     <section
-      className={`rounded-2xl border border-ink/10 bg-white p-6 shadow-soft ${className}`}
+      className={`rounded-3xl border border-ink/10 bg-white/90 p-4 shadow-sm sm:p-5 lg:p-6 ${className}`}
     >
-      <div className="mb-4">
-        <h2 className="text-lg font-semibold text-ink">{title}</h2>
+      <div className="mb-5 min-w-0">
+        <h2 className="text-xl font-bold leading-tight text-ink sm:text-2xl">
+          {title}
+        </h2>
         {description ? (
-          <p className="mt-1 text-sm text-ink/60">{description}</p>
+          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-ink/60">
+            {description}
+          </p>
         ) : null}
       </div>
 
-      {children}
+      <div className="min-w-0">{children}</div>
     </section>
   );
 }
