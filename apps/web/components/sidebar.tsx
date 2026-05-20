@@ -35,7 +35,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
   return (
     <aside className="flex h-full w-full flex-col border-r border-ink/10 bg-white px-4 py-5 sm:px-5 sm:py-6 lg:w-72">
       <div className="mb-6">
-        <div className="font-delaqrus text-lg leading-tight text-ink sm:text-xl">
+        <div className="font-delaqrus overflow-hidden text-ellipsis text-base leading-tight text-ink sm:text-lg">
           R.·.L.·. PROGRESO Nº 100
         </div>
         <div className="mt-1 text-sm text-ink/60">
