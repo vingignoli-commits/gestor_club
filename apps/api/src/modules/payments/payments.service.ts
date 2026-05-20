@@ -1,8 +1,4 @@
-import {
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PaymentStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
@@ -13,36 +9,29 @@ export class PaymentsService {
 
   findAll() {
     return this.prisma.payment.findMany({
-      include: { member: true },
-      orderBy: { paidAt: 'desc' },
+      include: {
+        member: true,
+      },
+      orderBy: {
+        paidAt: 'desc',
+      },
     });
   }
 
   async create(dto: CreatePaymentDto) {
     const member = await this.prisma.member.findUnique({
-      where: { id: dto.memberId },
+      where: {
+        id: dto.memberId,
+      },
     });
 
     if (!member) {
       throw new NotFoundException('Socio no encontrado');
     }
 
-    const existingPayment = await this.prisma.payment.findFirst({
-      where: {
-        memberId: dto.memberId,
-        periodYear: dto.periodYear,
-        periodMonth: dto.periodMonth,
-        status: PaymentStatus.REGISTERED,
-      },
-    });
-
-    if (existingPayment) {
-      throw new ConflictException(
-        `El mes ${String(dto.periodMonth).padStart(2, '0')}/${dto.periodYear} ya está cargado para este socio.`,
-      );
-    }
-
     const periodLabel = `${String(dto.periodMonth).padStart(2, '0')}/${dto.periodYear}`;
+    const receiptNote = dto.receiptNote?.trim() || dto.notes?.trim() || null;
+    const receiptUrl = dto.receiptUrl?.trim() || null;
 
     return this.prisma.$transaction(async (tx) => {
       const payment = await tx.payment.create({
@@ -53,7 +42,9 @@ export class PaymentsService {
           periodMonth: dto.periodMonth,
           amount: dto.amount,
           methodCode: dto.methodCode,
-          notes: dto.notes ?? null,
+          notes: dto.notes?.trim() || null,
+          receiptUrl,
+          receiptNote,
         },
         include: {
           member: true,
@@ -68,9 +59,10 @@ export class PaymentsService {
           methodCode: dto.methodCode,
           incomeType: 'MEMBERSHIP',
           description: `Cobro cuota ${periodLabel} - ${member.lastName}, ${member.firstName}`,
-          receiptNote: dto.notes ?? null,
+          receiptUrl,
+          receiptNote,
           referenceId: payment.id,
-          notes: dto.notes ?? null,
+          notes: dto.notes?.trim() || null,
         },
       });
 
@@ -80,15 +72,23 @@ export class PaymentsService {
 
   findOne(id: string) {
     return this.prisma.payment.findUnique({
-      where: { id },
-      include: { member: true },
+      where: {
+        id,
+      },
+      include: {
+        member: true,
+      },
     });
   }
 
   async voidPayment(id: string) {
     const payment = await this.prisma.payment.findUnique({
-      where: { id },
-      include: { member: true },
+      where: {
+        id,
+      },
+      include: {
+        member: true,
+      },
     });
 
     if (!payment) {
@@ -101,11 +101,15 @@ export class PaymentsService {
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.payment.update({
-        where: { id },
+        where: {
+          id,
+        },
         data: {
           status: PaymentStatus.VOID,
         },
-        include: { member: true },
+        include: {
+          member: true,
+        },
       });
 
       await tx.cashTransaction.create({
@@ -117,6 +121,8 @@ export class PaymentsService {
           expenseType: 'OTHER',
           description: `Anulación de pago - ${payment.member.lastName}, ${payment.member.firstName}`,
           referenceId: payment.id,
+          receiptUrl: payment.receiptUrl ?? null,
+          receiptNote: payment.receiptNote ?? null,
           notes: `Anulación del pago ${payment.id}`,
         },
       });
@@ -148,6 +154,7 @@ export class PaymentsService {
 
     for (const payment of payments) {
       const key = `${payment.periodYear}-${payment.periodMonth}`;
+
       const current = summaryMap.get(key) ?? {
         periodYear: payment.periodYear,
         periodMonth: payment.periodMonth,
@@ -165,6 +172,7 @@ export class PaymentsService {
       if (a.periodYear !== b.periodYear) {
         return a.periodYear - b.periodYear;
       }
+
       return a.periodMonth - b.periodMonth;
     });
   }
