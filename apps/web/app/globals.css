@@ -50,8 +50,9 @@ td {
 
 .font-delaqrus {
   font-family: 'Delaqrus', Georgia, serif;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   font-weight: 400;
+  white-space: nowrap;
 }
 
 @media (max-width: 640px) {
