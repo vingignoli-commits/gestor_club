@@ -38,7 +38,7 @@ type CampaignSkipped = {
   firstName: string;
   lastName: string;
   destination: string | null;
-  reasonCode: 'NO_DEBT';
+  reasonCode: 'NO_DEBT' | 'HONOR_MEMBER';
   reasonLabel: string;
 };
 
@@ -66,17 +66,22 @@ function campaignTitle(code: CampaignCode) {
 
 function campaignDescription(code: CampaignCode) {
   return code === 'initial-notice'
-    ? 'Esta campaña incluye a todos los socios que deban al menos una cuota. Solo se excluye a quien no registra deuda.'
-    : 'Esta campaña incluye a todos los socios que deban al menos una cuota. El registro de envío es individual.';
+    ? 'Esta campaña incluye a todos los socios que deban al menos una cuota. Se excluye a quienes no registran deuda y a los miembros de honor.'
+    : 'Esta campaña incluye a todos los socios que deban al menos una cuota. Se excluye a quienes no registran deuda y a los miembros de honor.';
 }
 
 export default function MessagingPage() {
   const [activeCampaign, setActiveCampaign] =
     useState<CampaignCode>('initial-notice');
-  const [initialCampaign, setInitialCampaign] = useState<CampaignPreview | null>(null);
-  const [reminderCampaign, setReminderCampaign] = useState<CampaignPreview | null>(null);
+  const [initialCampaign, setInitialCampaign] =
+    useState<CampaignPreview | null>(null);
+  const [reminderCampaign, setReminderCampaign] =
+    useState<CampaignPreview | null>(null);
   const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState<{ code: CampaignCode; memberId: string } | null>(null);
+  const [sending, setSending] = useState<{
+    code: CampaignCode;
+    memberId: string;
+  } | null>(null);
   const [error, setError] = useState('');
 
   async function loadAll() {
@@ -124,7 +129,7 @@ export default function MessagingPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex gap-3">
+      <div className="flex flex-wrap gap-3">
         {(['initial-notice', 'reminder'] as CampaignCode[]).map((code) => (
           <button
             key={code}
@@ -314,7 +319,7 @@ export default function MessagingPage() {
             {campaign.skipped.length > 0 && (
               <SectionCard
                 title="Socios excluidos"
-                description="Solo se excluye a quienes no registran cuotas adeudadas."
+                description="Se excluye a quienes no registran cuotas adeudadas y a los miembros de honor."
                 className="mt-2"
               >
                 <div className="space-y-3">
