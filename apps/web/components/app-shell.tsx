@@ -53,7 +53,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-white text-ink">
       <div className="sticky top-0 z-40 flex items-center justify-between border-b border-ink/10 bg-white/95 px-4 py-3 backdrop-blur lg:hidden">
         <div>
-          <div className="font-delaqrus text-sm leading-tight text-ink">
+          <div className="font-delaqrus overflow-hidden text-ellipsis text-xs leading-tight text-ink sm:text-sm">
             PROGRESO Nº 100
           </div>
           <div className="text-xs text-ink/50">Administración integral</div>
