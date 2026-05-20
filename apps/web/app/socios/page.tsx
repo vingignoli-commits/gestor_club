@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { SectionCard } from '../../components/section-card';
 import { useAuth } from '../../context/auth';
 import { api } from '../../lib/api';
+import { formatDateOnly } from '../../lib/date';
 
 type Member = {
   id: string;
@@ -250,9 +251,7 @@ export default function MembersPage() {
           phone: form.phone.trim() || undefined,
           email: form.email.trim() || undefined,
           notes: form.notes.trim() || undefined,
-          birthDate: form.birthDate
-            ? new Date(form.birthDate).toISOString()
-            : undefined,
+          birthDate: form.birthDate || undefined,
         });
       } else {
         await api.post('/members', {
@@ -266,9 +265,7 @@ export default function MembersPage() {
           email: form.email.trim() || undefined,
           notes: form.notes.trim() || undefined,
           joinedAt: new Date(form.joinedAt).toISOString(),
-          birthDate: form.birthDate
-            ? new Date(form.birthDate).toISOString()
-            : undefined,
+          birthDate: form.birthDate || undefined,
         });
       }
 
@@ -642,9 +639,7 @@ export default function MembersPage() {
                         {statusLabel(m.status)}
                       </td>
                       <td className="px-3 py-3 text-ink/80">
-                        {m.birthDate
-                          ? new Date(m.birthDate).toLocaleDateString('es-AR')
-                          : '-'}
+                        {formatDateOnly(m.birthDate)}
                       </td>
                       {canEdit && (
                         <td className="rounded-r-2xl px-3 py-3">
