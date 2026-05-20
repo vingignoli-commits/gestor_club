@@ -49,7 +49,7 @@ type CampaignSkipped = {
   firstName: string;
   lastName: string;
   destination: string | null;
-  reasonCode: 'NO_DEBT';
+  reasonCode: 'NO_DEBT' | 'HONOR_MEMBER';
   reasonLabel: string;
 };
 
@@ -255,6 +255,20 @@ export class WhatsappService {
 
     for (const member of members) {
       const phone = this.normalizePhone(member.phone);
+
+      if (member.category === MemberCategory.HONOR) {
+        skipped.push({
+          memberId: member.id,
+          matricula: member.matricula,
+          firstName: member.firstName,
+          lastName: member.lastName,
+          destination: phone,
+          reasonCode: 'HONOR_MEMBER',
+          reasonLabel: 'Miembro de honor',
+        });
+        continue;
+      }
+
       const snapshot = this.buildDebtSnapshot(member, currentRates, queryDate);
 
       if (snapshot.monthsOwed === 0) {
@@ -341,10 +355,10 @@ export class WhatsappService {
     const currentAmountText = this.formatCurrency(currentMonthAmount);
 
     if (overdueMonthLabels.length === 0) {
-      return `${greeting} Siendo que arrancó el ${currentMonthLabel}  estamos haciendo el seguimiento de los pagos de la cápita, lo tuyo es ${currentAmountText} y lo debes transferir al alias tesoreria.p100 así como también enviarme el comprobante por este mismo medio. Desde ya muchas gracias y abrazo grande Q.·.H.·.`;
+      return `${greeting} Siendo que arrancó el ${currentMonthLabel} estamos haciendo el seguimiento de los pagos de la cápita, lo tuyo es ${currentAmountText} y lo debes transferir al alias tesoreria.p100 así como también enviarme el comprobante por este mismo medio.\nDesde ya muchas gracias y abrazo grande Q.·.H.·.`;
     }
 
-    return `${greeting} Siendo que arrancó el ${currentMonthLabel}  estamos haciendo el seguimiento de los pagos de la cápita, lo tuyo es ${currentAmountText} y lo debes transferir al alias tesoreria.p100 así como también enviarme el comprobante por este mismo medio. Además, registrás cuotas adeudadas de los siguientes meses: ${overdueMonthLabels.join(', ')}. Desde ya muchas gracias y abrazo grande Q.·.H.·.`;
+    return `${greeting} Siendo que arrancó el ${currentMonthLabel} estamos haciendo el seguimiento de los pagos de la cápita, lo tuyo es ${currentAmountText} y lo debes transferir al alias tesoreria.p100 así como también enviarme el comprobante por este mismo medio. Además, registrás cuotas adeudadas de los siguientes meses: ${overdueMonthLabels.join(', ')}.\nDesde ya muchas gracias y abrazo grande Q.·.H.·.`;
   }
 
   private buildReminderMessage(
@@ -357,7 +371,7 @@ export class WhatsappService {
         ? `Hola V.·.H.·. ${firstName}.`
         : `Hola Q.·.H.·. ${firstName}.`;
 
-    return `${greeting} Este mensaje es solo recordatorio que todavía no has abonado la totalidad de las cápitas.\nRegistrás cuotas adeudadas de los siguientes meses: ${owedMonthLabels.join(', ')}. Cualqueir inquietud estoy disponible.\nT.·.A.·.F.·.`;
+    return `${greeting} Este mensaje es solo recordatorio que todavía no has abonado la totalidad de las cápitas.\nRegistrás cuotas adeudadas de los siguientes meses: ${owedMonthLabels.join(', ')}.\nCualqueir inquietud estoy disponible.\nT.·.A.·.F.·.`;
   }
 
   private formatCurrency(amount: number) {
@@ -526,6 +540,7 @@ export class WhatsappService {
     monthEnd: Date,
   ) {
     const effectiveTo = to ?? new Date('2999-12-31T00:00:00.000Z');
+
     return (
       from.getTime() < monthEnd.getTime() &&
       effectiveTo.getTime() > monthStart.getTime()
