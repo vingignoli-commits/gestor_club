@@ -110,6 +110,8 @@ model Payment {
   methodCode  String
   status      PaymentStatus       @default(REGISTERED)
   notes       String?
+  receiptUrl  String?
+  receiptNote String?
   createdAt   DateTime            @default(now())
   member      Member              @relation(fields: [memberId], references: [id])
   allocations PaymentAllocation[]
