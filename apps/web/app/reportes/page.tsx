@@ -140,81 +140,346 @@ export default function ReportsPage() {
     );
   }, [categoryCalculationRows]);
 
-  function buildPdfHtml() {
-    const today = new Date().toLocaleDateString('es-AR');
-    const title =
-      tab === 'deudores'
-        ? 'Reporte de socios deudores'
-        : tab === 'recaudacion'
-          ? 'Reporte de recaudación mensual'
-          : 'Reporte de socios por categoría';
+  function reportTitle() {
+    if (tab === 'deudores') return 'Reporte de socios deudores';
+    if (tab === 'recaudacion') return 'Reporte de recaudación mensual';
+    return 'Reporte de socios por categoría';
+  }
 
-    const styles = `
+  function reportCriteria() {
+    if (tab === 'deudores') {
+      return [
+        'Fuente: cuotas registradas, socios activos y valores vigentes de categoría.',
+        'Criterio: deuda calculada a la fecha de emisión.',
+        'Incluye: mes actual si corresponde y meses vencidos impagos.',
+      ];
+    }
+
+    if (tab === 'recaudacion') {
+      return [
+        'Fuente: pagos registrados en tesorería.',
+        'Criterio: agrupación por período imputado de cobro.',
+        `Períodos incluidos: ${monthly.length}.`,
+      ];
+    }
+
+    return [
+      'Fuente: padrón actual de socios.',
+      'Criterio: distribución por categoría.',
+      'Cálculo adicional: valor unitario multiplicado solo por socios activos.',
+    ];
+  }
+
+  function pdfStyles() {
+    return `
       <style>
+        @page {
+          size: A4;
+          margin: 16mm 14mm 18mm;
+        }
+
+        * {
+          box-sizing: border-box;
+        }
+
         body {
-          font-family: Arial, sans-serif;
+          margin: 0;
+          font-family: Arial, Helvetica, sans-serif;
           color: #111827;
-          padding: 32px;
+          background: #ffffff;
+          font-size: 11px;
+          line-height: 1.35;
         }
-        h1 {
-          font-size: 24px;
-          margin: 0 0 4px;
+
+        .page {
+          width: 100%;
         }
-        .meta {
+
+        .header {
+          display: grid;
+          grid-template-columns: 1fr auto;
+          gap: 16px;
+          align-items: start;
+          border-bottom: 2px solid #111827;
+          padding-bottom: 14px;
+          margin-bottom: 18px;
+        }
+
+        .institution {
+          font-family: Georgia, serif;
+          font-size: 20px;
+          letter-spacing: 0.08em;
+          font-weight: 700;
+          text-transform: uppercase;
+          white-space: nowrap;
+        }
+
+        .subtitle {
+          margin-top: 4px;
+          font-size: 11px;
+          color: #4b5563;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+        }
+
+        .meta-box {
+          border: 1px solid #d1d5db;
+          border-radius: 10px;
+          padding: 10px 12px;
+          min-width: 180px;
+          font-size: 10px;
+        }
+
+        .meta-row {
+          display: flex;
+          justify-content: space-between;
+          gap: 10px;
+          margin-bottom: 4px;
+        }
+
+        .meta-row:last-child {
+          margin-bottom: 0;
+        }
+
+        .meta-label {
           color: #6b7280;
-          font-size: 12px;
-          margin-bottom: 24px;
         }
+
+        .meta-value {
+          font-weight: 700;
+          text-align: right;
+        }
+
+        h1 {
+          font-size: 18px;
+          margin: 0 0 10px;
+        }
+
+        .criteria {
+          border: 1px solid #e5e7eb;
+          background: #f9fafb;
+          border-radius: 12px;
+          padding: 10px 12px;
+          margin-bottom: 16px;
+        }
+
+        .criteria-title {
+          font-weight: 700;
+          margin-bottom: 6px;
+          text-transform: uppercase;
+          font-size: 10px;
+          color: #374151;
+          letter-spacing: 0.05em;
+        }
+
+        .criteria ul {
+          margin: 0;
+          padding-left: 16px;
+        }
+
+        .criteria li {
+          margin-bottom: 3px;
+        }
+
         .summary {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
-          gap: 12px;
-          margin-bottom: 24px;
+          gap: 10px;
+          margin-bottom: 16px;
         }
+
         .box {
           border: 1px solid #e5e7eb;
           border-radius: 12px;
-          padding: 12px;
+          padding: 10px;
+          min-height: 58px;
         }
+
         .box-label {
           color: #6b7280;
-          font-size: 11px;
+          font-size: 9px;
           text-transform: uppercase;
-          margin-bottom: 6px;
+          letter-spacing: 0.06em;
+          margin-bottom: 5px;
         }
+
         .box-value {
-          font-size: 20px;
-          font-weight: 700;
+          font-size: 16px;
+          font-weight: 800;
         }
+
+        .section-title {
+          font-size: 13px;
+          font-weight: 800;
+          margin: 18px 0 8px;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+        }
+
         table {
           width: 100%;
           border-collapse: collapse;
-          margin-top: 12px;
-          font-size: 12px;
+          margin-top: 8px;
+          page-break-inside: auto;
         }
+
+        thead {
+          display: table-header-group;
+        }
+
+        tr {
+          page-break-inside: avoid;
+          page-break-after: auto;
+        }
+
         th {
           text-align: left;
           background: #f3f4f6;
-          border: 1px solid #e5e7eb;
-          padding: 8px;
+          border: 1px solid #d1d5db;
+          padding: 7px;
+          font-size: 9px;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
         }
+
         td {
           border: 1px solid #e5e7eb;
-          padding: 8px;
+          padding: 7px;
           vertical-align: top;
         }
-        .section-title {
-          font-size: 16px;
-          font-weight: 700;
-          margin-top: 24px;
+
+        tfoot td {
+          background: #f9fafb;
+          font-weight: 800;
         }
-        @page {
-          size: A4;
-          margin: 14mm;
+
+        .footer {
+          margin-top: 34px;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 40px;
+          page-break-inside: avoid;
+        }
+
+        .signature {
+          padding-top: 34px;
+          text-align: center;
+        }
+
+        .signature-line {
+          border-top: 1px solid #111827;
+          padding-top: 8px;
+          font-weight: 700;
+        }
+
+        .signature-role {
+          margin-top: 3px;
+          color: #6b7280;
+          font-size: 10px;
+        }
+
+        .legal-note {
+          margin-top: 24px;
+          color: #6b7280;
+          font-size: 9px;
+          border-top: 1px solid #e5e7eb;
+          padding-top: 8px;
+        }
+
+        .amount {
+          text-align: right;
+          white-space: nowrap;
+        }
+
+        .center {
+          text-align: center;
+        }
+
+        @media print {
+          body {
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+          }
         }
       </style>
     `;
+  }
 
+  function buildPdfShell(content: string) {
+    const emittedAt = new Date();
+    const emittedDate = emittedAt.toLocaleDateString('es-AR');
+    const emittedTime = emittedAt.toLocaleTimeString('es-AR', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    const criteriaRows = reportCriteria()
+      .map((item) => `<li>${escapeHtml(item)}</li>`)
+      .join('');
+
+    return `
+      <!doctype html>
+      <html lang="es">
+        <head>
+          <meta charset="utf-8" />
+          <title>${escapeHtml(reportTitle())}</title>
+          ${pdfStyles()}
+        </head>
+        <body>
+          <main class="page">
+            <header class="header">
+              <div>
+                <div class="institution">R.·.L.·. PROGRESO Nº 100</div>
+                <div class="subtitle">Administración integral</div>
+              </div>
+
+              <div class="meta-box">
+                <div class="meta-row">
+                  <span class="meta-label">Fecha</span>
+                  <span class="meta-value">${escapeHtml(emittedDate)}</span>
+                </div>
+                <div class="meta-row">
+                  <span class="meta-label">Hora</span>
+                  <span class="meta-value">${escapeHtml(emittedTime)}</span>
+                </div>
+                <div class="meta-row">
+                  <span class="meta-label">Formato</span>
+                  <span class="meta-value">A4</span>
+                </div>
+              </div>
+            </header>
+
+            <h1>${escapeHtml(reportTitle())}</h1>
+
+            <section class="criteria">
+              <div class="criteria-title">Criterios / filtros del reporte</div>
+              <ul>${criteriaRows}</ul>
+            </section>
+
+            ${content}
+
+            <section class="footer">
+              <div class="signature">
+                <div class="signature-line">Firma y aclaración</div>
+                <div class="signature-role">Responsable de emisión</div>
+              </div>
+
+              <div class="signature">
+                <div class="signature-line">Firma y aclaración</div>
+                <div class="signature-role">Tesorería / Autoridad competente</div>
+              </div>
+            </section>
+
+            <div class="legal-note">
+              Documento generado desde el sistema de gestión. La información refleja los registros disponibles al momento de emisión.
+            </div>
+          </main>
+        </body>
+      </html>
+    `;
+  }
+
+  function buildPdfHtml() {
     if (tab === 'deudores') {
       const rows = debtors
         .map(
@@ -224,53 +489,45 @@ export default function ReportsPage() {
               <td>${escapeHtml(debtor.matricula)}</td>
               <td>${escapeHtml(CATEGORY_LABELS[debtor.category] ?? debtor.category)}</td>
               <td>${escapeHtml(debtor.debtLevelLabel)}</td>
-              <td>${escapeHtml(debtor.monthsOwed)}</td>
+              <td class="center">${escapeHtml(debtor.monthsOwed)}</td>
               <td>${escapeHtml(debtor.overdueMonthLabels.join(', ') || '-')}</td>
-              <td>${escapeHtml(fmt(debtor.debt))}</td>
+              <td class="amount">${escapeHtml(fmt(debtor.debt))}</td>
             </tr>
           `,
         )
         .join('');
 
-      return `
-        <html>
-          <head><title>${title}</title>${styles}</head>
-          <body>
-            <h1>${title}</h1>
-            <div class="meta">Generado el ${today}</div>
+      return buildPdfShell(`
+        <section class="summary">
+          <div class="box">
+            <div class="box-label">Socios deudores</div>
+            <div class="box-value">${debtors.length}</div>
+          </div>
+          <div class="box">
+            <div class="box-label">Deuda total estimada</div>
+            <div class="box-value">${fmt(totalDebt)}</div>
+          </div>
+          <div class="box">
+            <div class="box-label">Tipo de reporte</div>
+            <div class="box-value">Deudores</div>
+          </div>
+        </section>
 
-            <div class="summary">
-              <div class="box">
-                <div class="box-label">Socios deudores</div>
-                <div class="box-value">${debtors.length}</div>
-              </div>
-              <div class="box">
-                <div class="box-label">Deuda total estimada</div>
-                <div class="box-value">${fmt(totalDebt)}</div>
-              </div>
-              <div class="box">
-                <div class="box-label">Reporte</div>
-                <div class="box-value">Deudores</div>
-              </div>
-            </div>
-
-            <table>
-              <thead>
-                <tr>
-                  <th>Socio</th>
-                  <th>Matrícula</th>
-                  <th>Categoría</th>
-                  <th>Nivel deuda</th>
-                  <th>Meses adeudados</th>
-                  <th>Meses vencidos</th>
-                  <th>Deuda total</th>
-                </tr>
-              </thead>
-              <tbody>${rows}</tbody>
-            </table>
-          </body>
-        </html>
-      `;
+        <table>
+          <thead>
+            <tr>
+              <th>Socio</th>
+              <th>Matrícula</th>
+              <th>Categoría</th>
+              <th>Nivel deuda</th>
+              <th>Meses</th>
+              <th>Meses vencidos</th>
+              <th>Deuda total</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `);
     }
 
     if (tab === 'recaudacion') {
@@ -279,46 +536,38 @@ export default function ReportsPage() {
           (item) => `
             <tr>
               <td>${escapeHtml(item.month)}</td>
-              <td>${escapeHtml(fmt(item.total))}</td>
+              <td class="amount">${escapeHtml(fmt(item.total))}</td>
             </tr>
           `,
         )
         .join('');
 
-      return `
-        <html>
-          <head><title>${title}</title>${styles}</head>
-          <body>
-            <h1>${title}</h1>
-            <div class="meta">Generado el ${today}</div>
+      return buildPdfShell(`
+        <section class="summary">
+          <div class="box">
+            <div class="box-label">Total recaudado</div>
+            <div class="box-value">${fmt(totalCollected)}</div>
+          </div>
+          <div class="box">
+            <div class="box-label">Períodos</div>
+            <div class="box-value">${monthly.length}</div>
+          </div>
+          <div class="box">
+            <div class="box-label">Tipo de reporte</div>
+            <div class="box-value">Recaudación</div>
+          </div>
+        </section>
 
-            <div class="summary">
-              <div class="box">
-                <div class="box-label">Total recaudado</div>
-                <div class="box-value">${fmt(totalCollected)}</div>
-              </div>
-              <div class="box">
-                <div class="box-label">Periodos</div>
-                <div class="box-value">${monthly.length}</div>
-              </div>
-              <div class="box">
-                <div class="box-label">Reporte</div>
-                <div class="box-value">Recaudación</div>
-              </div>
-            </div>
-
-            <table>
-              <thead>
-                <tr>
-                  <th>Mes</th>
-                  <th>Total recaudado</th>
-                </tr>
-              </thead>
-              <tbody>${rows}</tbody>
-            </table>
-          </body>
-        </html>
-      `;
+        <table>
+          <thead>
+            <tr>
+              <th>Mes</th>
+              <th>Total recaudado</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `);
     }
 
     const categoryRows = categories
@@ -326,9 +575,9 @@ export default function ReportsPage() {
         (category) => `
           <tr>
             <td>${escapeHtml(CATEGORY_LABELS[category.category] ?? category.category)}</td>
-            <td>${escapeHtml(category.active)}</td>
-            <td>${escapeHtml(category.inactive)}</td>
-            <td>${escapeHtml(category.total)}</td>
+            <td class="center">${escapeHtml(category.active)}</td>
+            <td class="center">${escapeHtml(category.inactive)}</td>
+            <td class="center">${escapeHtml(category.total)}</td>
           </tr>
         `,
       )
@@ -339,78 +588,68 @@ export default function ReportsPage() {
         (row) => `
           <tr>
             <td>${escapeHtml(CATEGORY_LABELS[row.category] ?? row.category)}</td>
-            <td>${escapeHtml(row.activeMembers)}</td>
-            <td>${escapeHtml(fmt(row.unitValue))}</td>
-            <td>${escapeHtml(fmt(row.totalValue))}</td>
+            <td class="center">${escapeHtml(row.activeMembers)}</td>
+            <td class="amount">${escapeHtml(fmt(row.unitValue))}</td>
+            <td class="amount">${escapeHtml(fmt(row.totalValue))}</td>
           </tr>
         `,
       )
       .join('');
 
-    return `
-      <html>
-        <head><title>${title}</title>${styles}</head>
-        <body>
-          <h1>${title}</h1>
-          <div class="meta">Generado el ${today}</div>
+    return buildPdfShell(`
+      <section class="summary">
+        <div class="box">
+          <div class="box-label">Categorías</div>
+          <div class="box-value">${categories.length}</div>
+        </div>
+        <div class="box">
+          <div class="box-label">Total proyección</div>
+          <div class="box-value">${fmt(totalCategoryProjection)}</div>
+        </div>
+        <div class="box">
+          <div class="box-label">Tipo de reporte</div>
+          <div class="box-value">Categorías</div>
+        </div>
+      </section>
 
-          <div class="summary">
-            <div class="box">
-              <div class="box-label">Categorías</div>
-              <div class="box-value">${categories.length}</div>
-            </div>
-            <div class="box">
-              <div class="box-label">Total proyección</div>
-              <div class="box-value">${fmt(totalCategoryProjection)}</div>
-            </div>
-            <div class="box">
-              <div class="box-label">Reporte</div>
-              <div class="box-value">Categorías</div>
-            </div>
-          </div>
+      <div class="section-title">Socios por categoría</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Categoría</th>
+            <th>Activos</th>
+            <th>Inactivos</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>${categoryRows}</tbody>
+      </table>
 
-          <div class="section-title">Socios por categoría</div>
-          <table>
-            <thead>
-              <tr>
-                <th>Categoría</th>
-                <th>Activos</th>
-                <th>Inactivos</th>
-                <th>Total</th>
-              </tr>
-            </thead>
-            <tbody>${categoryRows}</tbody>
-          </table>
-
-          <div class="section-title">Cálculo por valor unitario</div>
-          <table>
-            <thead>
-              <tr>
-                <th>Categoría</th>
-                <th>Socios activos</th>
-                <th>Valor unitario</th>
-                <th>Resultado</th>
-              </tr>
-            </thead>
-            <tbody>${projectionRows}</tbody>
-            <tfoot>
-              <tr>
-                <td colspan="3"><strong>Total general</strong></td>
-                <td><strong>${fmt(totalCategoryProjection)}</strong></td>
-              </tr>
-            </tfoot>
-          </table>
-        </body>
-      </html>
-    `;
+      <div class="section-title">Cálculo por valor unitario</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Categoría</th>
+            <th>Socios activos</th>
+            <th>Valor unitario</th>
+            <th>Resultado</th>
+          </tr>
+        </thead>
+        <tbody>${projectionRows}</tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3">Total general</td>
+            <td class="amount">${fmt(totalCategoryProjection)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    `);
   }
 
   function downloadPdf() {
     const printWindow = window.open('', '_blank');
 
-    if (!printWindow) {
-      return;
-    }
+    if (!printWindow) return;
 
     printWindow.document.open();
     printWindow.document.write(buildPdfHtml());
