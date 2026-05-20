@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { CashService } from './cash.service';
 
 @Controller('cash')
@@ -15,6 +15,11 @@ export class CashController {
     return this.cashService.getSummary();
   }
 
+  @Get('period-closes')
+  getPeriodCloses() {
+    return this.cashService.getPeriodCloses();
+  }
+
   @Post()
   create(
     @Body()
@@ -26,11 +31,43 @@ export class CashController {
       methodCode?: string;
       incomeType?: string;
       expenseType?: string;
+      receiptUrl?: string;
       receiptNote?: string;
       notes?: string;
     },
   ) {
     return this.cashService.create(body);
+  }
+
+  @Patch(':id')
+  update(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      direction?: 'IN' | 'OUT';
+      amount?: number;
+      description?: string;
+      occurredAt?: string;
+      methodCode?: string;
+      incomeType?: string;
+      expenseType?: string;
+      receiptUrl?: string;
+      receiptNote?: string;
+      notes?: string;
+    },
+  ) {
+    return this.cashService.update(id, body);
+  }
+
+  @Post(':id/void')
+  voidTransaction(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      reason?: string;
+    },
+  ) {
+    return this.cashService.voidTransaction(id, body.reason);
   }
 
   @Post('correction')
@@ -44,5 +81,17 @@ export class CashController {
     },
   ) {
     return this.cashService.createCorrection(body);
+  }
+
+  @Post('period-close')
+  closePeriod(
+    @Body()
+    body: {
+      period: string;
+      initialBalance: number;
+      notes?: string;
+    },
+  ) {
+    return this.cashService.closePeriod(body);
   }
 }
