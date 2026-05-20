@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { SectionCard } from '../components/section-card';
 import { api } from '../lib/api';
+import { formatBirthday } from '../lib/date';
 
 type DashboardData = {
   people: {
@@ -340,10 +341,7 @@ export default function HomePage() {
                       >
                         <span className="text-ink">{item.fullName}</span>
                         <span className="font-semibold text-ink">
-                          {new Date(item.date).toLocaleDateString('es-AR', {
-                            day: '2-digit',
-                            month: '2-digit',
-                          })}
+                          {formatBirthday(item.date)}
                         </span>
                       </div>
                     ))}
