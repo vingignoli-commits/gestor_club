@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: 'Delaqrus';
+  src: url('/fonts/DELAQRUS.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   color-scheme: light;
 }
@@ -38,6 +46,12 @@ table {
 th,
 td {
   vertical-align: top;
+}
+
+.font-delaqrus {
+  font-family: 'Delaqrus', Georgia, serif;
+  letter-spacing: 0.08em;
+  font-weight: 400;
 }
 
 @media (max-width: 640px) {
