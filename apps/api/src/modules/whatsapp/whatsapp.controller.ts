@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { WhatsappService } from './whatsapp.service';
 
 @Controller('whatsapp')
@@ -8,6 +8,30 @@ export class WhatsappController {
   @Get('templates')
   getTemplates() {
     return this.whatsappService.getTemplates();
+  }
+
+  @Post('templates')
+  createTemplate(
+    @Body()
+    body: {
+      name: string;
+      body: string;
+    },
+  ) {
+    return this.whatsappService.createTemplate(body.name, body.body);
+  }
+
+  @Patch('templates/:id')
+  updateTemplate(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      name?: string;
+      body?: string;
+      isActive?: boolean;
+    },
+  ) {
+    return this.whatsappService.updateTemplate(id, body);
   }
 
   @Get('campaigns/initial-notice')
