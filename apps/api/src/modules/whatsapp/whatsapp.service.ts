@@ -75,7 +75,51 @@ export class WhatsappService {
   getTemplates() {
     return this.prisma.whatsappTemplate.findMany({
       where: { isActive: true },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }],
+    });
+  }
+
+  async createTemplate(name: string, body: string) {
+    const cleanName = name.trim();
+    const cleanBody = body.trim();
+
+    if (!cleanName || !cleanBody) {
+      throw new NotFoundException('Nombre y mensaje son obligatorios.');
+    }
+
+    return this.prisma.whatsappTemplate.create({
+      data: {
+        name: cleanName,
+        body: cleanBody,
+        code: this.buildTemplateCode(cleanName),
+        isActive: true,
+      },
+    });
+  }
+
+  async updateTemplate(
+    id: string,
+    dto: {
+      name?: string;
+      body?: string;
+      isActive?: boolean;
+    },
+  ) {
+    const template = await this.prisma.whatsappTemplate.findUnique({
+      where: { id },
+    });
+
+    if (!template) {
+      throw new NotFoundException('Plantilla no encontrada.');
+    }
+
+    return this.prisma.whatsappTemplate.update({
+      where: { id },
+      data: {
+        name: dto.name === undefined ? undefined : dto.name.trim(),
+        body: dto.body === undefined ? undefined : dto.body.trim(),
+        isActive: dto.isActive,
+      },
     });
   }
 
@@ -386,6 +430,19 @@ export class WhatsappService {
     if (!phone) return null;
     const digits = phone.replace(/\D/g, '');
     return digits || null;
+  }
+
+  private buildTemplateCode(name: string) {
+    const slug =
+      name
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 40) || 'plantilla';
+
+    return `custom_${slug}_${Date.now()}`;
   }
 
   private buildCurrentRatesMap(
