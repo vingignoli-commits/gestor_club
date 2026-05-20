@@ -34,4 +34,12 @@ export class CreatePaymentDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsString()
+  receiptUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  receiptNote?: string;
 }
