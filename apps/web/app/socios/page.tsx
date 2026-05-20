@@ -444,74 +444,42 @@ export default function MembersPage() {
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-ink/50">
                   <th className="px-3 py-2">
-                    <button
-                      type="button"
-                      onClick={() => toggleSort('matricula')}
-                      className="font-semibold"
-                    >
+                    <button type="button" onClick={() => toggleSort('matricula')} className="font-semibold">
                       Matrícula {sortIndicator('matricula')}
                     </button>
                   </th>
                   <th className="px-3 py-2">
-                    <button
-                      type="button"
-                      onClick={() => toggleSort('lastName')}
-                      className="font-semibold"
-                    >
+                    <button type="button" onClick={() => toggleSort('lastName')} className="font-semibold">
                       H.·. {sortIndicator('lastName')}
                     </button>
                   </th>
                   <th className="px-3 py-2">
-                    <button
-                      type="button"
-                      onClick={() => toggleSort('category')}
-                      className="font-semibold"
-                    >
+                    <button type="button" onClick={() => toggleSort('category')} className="font-semibold">
                       Categoría {sortIndicator('category')}
                     </button>
                   </th>
                   <th className="px-3 py-2">
-                    <button
-                      type="button"
-                      onClick={() => toggleSort('grade')}
-                      className="font-semibold"
-                    >
+                    <button type="button" onClick={() => toggleSort('grade')} className="font-semibold">
                       Grado {sortIndicator('grade')}
                     </button>
                   </th>
                   <th className="px-3 py-2">
-                    <button
-                      type="button"
-                      onClick={() => toggleSort('phone')}
-                      className="font-semibold"
-                    >
+                    <button type="button" onClick={() => toggleSort('phone')} className="font-semibold">
                       Celular {sortIndicator('phone')}
                     </button>
                   </th>
                   <th className="px-3 py-2">
-                    <button
-                      type="button"
-                      onClick={() => toggleSort('email')}
-                      className="font-semibold"
-                    >
+                    <button type="button" onClick={() => toggleSort('email')} className="font-semibold">
                       Email {sortIndicator('email')}
                     </button>
                   </th>
                   <th className="px-3 py-2">
-                    <button
-                      type="button"
-                      onClick={() => toggleSort('status')}
-                      className="font-semibold"
-                    >
+                    <button type="button" onClick={() => toggleSort('status')} className="font-semibold">
                       Estado {sortIndicator('status')}
                     </button>
                   </th>
                   <th className="px-3 py-2">
-                    <button
-                      type="button"
-                      onClick={() => toggleSort('birthDate')}
-                      className="font-semibold"
-                    >
+                    <button type="button" onClick={() => toggleSort('birthDate')} className="font-semibold">
                       Nacimiento {sortIndicator('birthDate')}
                     </button>
                   </th>
@@ -605,6 +573,7 @@ export default function MembersPage() {
                   {canEdit && <th className="px-3 py-2" />}
                 </tr>
               </thead>
+
               <tbody>
                 {filteredMembers.map((m) => {
                   const whatsappLink = buildWhatsappLink(m);
@@ -635,12 +604,8 @@ export default function MembersPage() {
                         )}
                       </td>
                       <td className="px-3 py-3 text-ink/80">{m.email ?? '-'}</td>
-                      <td className="px-3 py-3 text-ink/80">
-                        {statusLabel(m.status)}
-                      </td>
-                      <td className="px-3 py-3 text-ink/80">
-                        {formatDateOnly(m.birthDate)}
-                      </td>
+                      <td className="px-3 py-3 text-ink/80">{statusLabel(m.status)}</td>
+                      <td className="px-3 py-3 text-ink/80">{formatDateOnly(m.birthDate)}</td>
                       {canEdit && (
                         <td className="rounded-r-2xl px-3 py-3">
                           <button
@@ -662,205 +627,223 @@ export default function MembersPage() {
       </SectionCard>
 
       {canEdit && showForm && (
-        <SectionCard
-          title={isEditing ? 'Editar H.·.' : 'Nuevo H.·.'}
-          description="Los valores posibles de grado son Aprendiz, Compañero y Maestro."
-        >
-          <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
-            <div>
-              <label className="mb-2 block text-sm font-medium text-ink/80">
-                Matrícula
-              </label>
-              <input
-                value={form.matricula}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, matricula: e.target.value }))
-                }
-                required
-                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-ink/80">
-                Fecha de alta
-              </label>
-              <input
-                type="date"
-                value={form.joinedAt}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, joinedAt: e.target.value }))
-                }
-                required
-                disabled={isEditing}
-                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm disabled:bg-ink/5"
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-ink/80">
-                Nombre
-              </label>
-              <input
-                value={form.firstName}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, firstName: e.target.value }))
-                }
-                required
-                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-ink/80">
-                Apellido
-              </label>
-              <input
-                value={form.lastName}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, lastName: e.target.value }))
-                }
-                required
-                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-ink/80">
-                Categoría
-              </label>
-              <select
-                value={form.category}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, category: e.target.value }))
-                }
-                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
-              >
-                {CATEGORY_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-ink/80">
-                Estado
-              </label>
-              <select
-                value={form.status}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, status: e.target.value }))
-                }
-                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
-              >
-                {STATUS_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-ink/80">
-                Grado
-              </label>
-              <select
-                value={form.grade}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, grade: e.target.value }))
-                }
-                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
-              >
-                {GRADE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-ink/80">
-                Fecha de nacimiento
-              </label>
-              <input
-                type="date"
-                value={form.birthDate}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, birthDate: e.target.value }))
-                }
-                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-ink/80">
-                Teléfono
-              </label>
-              <input
-                value={form.phone}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, phone: e.target.value }))
-                }
-                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="mb-2 block text-sm font-medium text-ink/80">
-                Email
-              </label>
-              <input
-                type="email"
-                value={form.email}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, email: e.target.value }))
-                }
-                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="mb-2 block text-sm font-medium text-ink/80">
-                Notas
-              </label>
-              <textarea
-                value={form.notes}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, notes: e.target.value }))
-                }
-                rows={4}
-                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
-              />
-            </div>
-
-            {error && (
-              <div className="md:col-span-2 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">
-                {error}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-3 py-4">
+          <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-3xl bg-white p-4 shadow-2xl sm:p-6">
+            <div className="mb-5 flex items-start justify-between gap-4 border-b border-ink/10 pb-4">
+              <div>
+                <h2 className="text-xl font-bold text-ink sm:text-2xl">
+                  {isEditing ? 'Editar H.·.' : 'Nuevo H.·.'}
+                </h2>
+                <p className="mt-1 text-sm text-ink/60">
+                  Los valores posibles de grado son Aprendiz, Compañero y Maestro.
+                </p>
               </div>
-            )}
 
-            <div className="md:col-span-2 flex gap-3">
               <button
                 type="button"
                 onClick={closeForm}
-                className="flex-1 rounded-2xl border border-ink/10 px-4 py-3 text-sm font-semibold"
+                className="rounded-2xl border border-ink/10 px-4 py-2 text-sm font-semibold text-ink/70 hover:bg-ink/5"
               >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="flex-1 rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
-              >
-                {saving ? 'Guardando...' : isEditing ? 'Guardar cambios' : 'Guardar'}
+                Cerrar
               </button>
             </div>
-          </form>
-        </SectionCard>
+
+            <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-ink/80">
+                  Matrícula
+                </label>
+                <input
+                  value={form.matricula}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, matricula: e.target.value }))
+                  }
+                  required
+                  className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-ink/80">
+                  Fecha de alta
+                </label>
+                <input
+                  type="date"
+                  value={form.joinedAt}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, joinedAt: e.target.value }))
+                  }
+                  required
+                  disabled={isEditing}
+                  className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm disabled:bg-ink/5"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-ink/80">
+                  Nombre
+                </label>
+                <input
+                  value={form.firstName}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, firstName: e.target.value }))
+                  }
+                  required
+                  className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-ink/80">
+                  Apellido
+                </label>
+                <input
+                  value={form.lastName}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, lastName: e.target.value }))
+                  }
+                  required
+                  className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-ink/80">
+                  Categoría
+                </label>
+                <select
+                  value={form.category}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, category: e.target.value }))
+                  }
+                  className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                >
+                  {CATEGORY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-ink/80">
+                  Estado
+                </label>
+                <select
+                  value={form.status}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, status: e.target.value }))
+                  }
+                  className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                >
+                  {STATUS_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-ink/80">
+                  Grado
+                </label>
+                <select
+                  value={form.grade}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, grade: e.target.value }))
+                  }
+                  className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                >
+                  {GRADE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-ink/80">
+                  Fecha de nacimiento
+                </label>
+                <input
+                  type="date"
+                  value={form.birthDate}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, birthDate: e.target.value }))
+                  }
+                  className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-ink/80">
+                  Teléfono
+                </label>
+                <input
+                  value={form.phone}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, phone: e.target.value }))
+                  }
+                  className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-sm font-medium text-ink/80">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, email: e.target.value }))
+                  }
+                  className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-sm font-medium text-ink/80">
+                  Notas
+                </label>
+                <textarea
+                  value={form.notes}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, notes: e.target.value }))
+                  }
+                  rows={4}
+                  className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                />
+              </div>
+
+              {error && (
+                <div className="md:col-span-2 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {error}
+                </div>
+              )}
+
+              <div className="sticky bottom-0 md:col-span-2 -mx-4 mt-2 flex gap-3 border-t border-ink/10 bg-white px-4 py-4 sm:-mx-6 sm:px-6">
+                <button
+                  type="button"
+                  onClick={closeForm}
+                  className="flex-1 rounded-2xl border border-ink/10 px-4 py-3 text-sm font-semibold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex-1 rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
+                >
+                  {saving ? 'Guardando...' : isEditing ? 'Guardar cambios' : 'Guardar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
