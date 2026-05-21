@@ -5,6 +5,7 @@ import { SectionCard } from '../../components/section-card';
 import { api } from '../../lib/api';
 
 type CampaignCode = 'initial-notice' | 'reminder' | 'custom';
+type DebtFilter = 'WITH_DEBT' | 'NO_DEBT';
 
 type CampaignRecipient = {
   memberId: string;
@@ -127,8 +128,6 @@ type CustomRecipient = {
   sent: boolean;
 };
 
-type DebtFilter = 'WITH_DEBT' | 'NO_DEBT';
-
 type CustomFilters = {
   categories: string[];
   grades: string[];
@@ -190,10 +189,6 @@ function gradeLabel(value: string | null) {
 
 function statusLabel(value: string) {
   return STATUS_OPTIONS.find((item) => item.value === value)?.label ?? value;
-}
-
-function formatDate(value: string) {
-  return value.slice(0, 10).split('-').reverse().join('/');
 }
 
 function formatDateTime(value: string) {
@@ -363,26 +358,26 @@ export default function MessagingPage() {
       ) {
         return false;
       }
-      
+
       if (
         filters.grades.length > 0 &&
         !filters.grades.includes(member.grade ?? '')
       ) {
         return false;
       }
-      
+
       if (
         filters.statuses.length > 0 &&
         !filters.statuses.includes(member.status)
       ) {
         return false;
       }
-      
+
       if (filters.debts.length > 0) {
         const matchesDebt =
           (filters.debts.includes('WITH_DEBT') && hasDebt) ||
           (filters.debts.includes('NO_DEBT') && !hasDebt);
-      
+
         if (!matchesDebt) return false;
       }
 
@@ -417,6 +412,53 @@ export default function MessagingPage() {
       prev.includes(memberId)
         ? prev.filter((id) => id !== memberId)
         : [...prev, memberId],
+    );
+  }
+
+  function toggleStringFilter(
+    key: 'categories' | 'grades' | 'statuses',
+    value: string,
+  ) {
+    setFilters((prev) => {
+      const current = prev[key];
+
+      return {
+        ...prev,
+        [key]: current.includes(value)
+          ? current.filter((item) => item !== value)
+          : [...current, value],
+      };
+    });
+  }
+
+  function toggleDebtFilter(value: DebtFilter) {
+    setFilters((prev) => {
+      const current = prev.debts;
+
+      return {
+        ...prev,
+        debts: current.includes(value)
+          ? current.filter((item) => item !== value)
+          : [...current, value],
+      };
+    });
+  }
+
+  function clearCustomFilters() {
+    setFilters({
+      categories: [],
+      grades: [],
+      statuses: [],
+      debts: [],
+    });
+  }
+
+  function hasCustomFilters() {
+    return (
+      filters.categories.length > 0 ||
+      filters.grades.length > 0 ||
+      filters.statuses.length > 0 ||
+      filters.debts.length > 0
     );
   }
 
@@ -554,40 +596,7 @@ export default function MessagingPage() {
     const history = await api.get<Dispatch[]>(`/whatsapp/members/${memberId}/history`);
     setMemberHistory(history);
   }
-  function toggleArrayFilter<K extends keyof CustomFilters>(
-    key: K,
-    value: CustomFilters[K][number],
-  ) {
-    setFilters((prev) => {
-      const current = prev[key];
-  
-      return {
-        ...prev,
-        [key]: current.includes(value)
-          ? current.filter((item) => item !== value)
-          : [...current, value],
-      };
-    });
-  }
-  
-  function clearCustomFilters() {
-    setFilters({
-      categories: [],
-      grades: [],
-      statuses: [],
-      debts: [],
-    });
-  }
-  
-  function hasCustomFilters() {
-    return (
-      filters.categories.length > 0 ||
-      filters.grades.length > 0 ||
-      filters.statuses.length > 0 ||
-      filters.debts.length > 0
-    );
-  }
-  
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap gap-3">
@@ -638,99 +647,115 @@ export default function MessagingPage() {
                       className="mb-4 w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
                     />
 
-              <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-2xl border border-ink/10 p-3">
-                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink/50">
-                    Categorías
-                  </div>
-                  <div className="space-y-2">
-                    {CATEGORY_OPTIONS.map((item) => (
-                      <label key={item.value} className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={filters.categories.includes(item.value)}
-                          onChange={() => toggleArrayFilter('categories', item.value)}
-                        />
-                        {item.label}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              
-                <div className="rounded-2xl border border-ink/10 p-3">
-                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink/50">
-                    Grados
-                  </div>
-                  <div className="space-y-2">
-                    {GRADE_OPTIONS.map((item) => (
-                      <label key={item.value} className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={filters.grades.includes(item.value)}
-                          onChange={() => toggleArrayFilter('grades', item.value)}
-                        />
-                        {item.label}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              
-                <div className="rounded-2xl border border-ink/10 p-3">
-                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink/50">
-                    Estados
-                  </div>
-                  <div className="space-y-2">
-                    {STATUS_OPTIONS.map((item) => (
-                      <label key={item.value} className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={filters.statuses.includes(item.value)}
-                          onChange={() => toggleArrayFilter('statuses', item.value)}
-                        />
-                        {item.label}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              
-                <div className="rounded-2xl border border-ink/10 p-3">
-                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink/50">
-                    Deuda
-                  </div>
-                  <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={filters.debts.includes('WITH_DEBT')}
-                        onChange={() => toggleArrayFilter('debts', 'WITH_DEBT')}
-                      />
-                      Con deuda
-                    </label>
-              
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={filters.debts.includes('NO_DEBT')}
-                        onChange={() => toggleArrayFilter('debts', 'NO_DEBT')}
-                      />
-                      Sin deuda
-                    </label>
-                  </div>
-                </div>
-              </div>
-              
-              {hasCustomFilters() && (
-                <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                  Hay filtros múltiples aplicados.
-                  <button
-                    type="button"
-                    onClick={clearCustomFilters}
-                    className="ml-3 font-semibold underline underline-offset-4"
-                  >
-                    Limpiar filtros
-                  </button>
-                </div>
-              )}
+                    <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      <div className="rounded-2xl border border-ink/10 p-3">
+                        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink/50">
+                          Categorías
+                        </div>
+                        <div className="space-y-2">
+                          {CATEGORY_OPTIONS.map((item) => (
+                            <label
+                              key={item.value}
+                              className="flex items-center gap-2 text-sm"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={filters.categories.includes(item.value)}
+                                onChange={() =>
+                                  toggleStringFilter('categories', item.value)
+                                }
+                              />
+                              {item.label}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-ink/10 p-3">
+                        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink/50">
+                          Grados
+                        </div>
+                        <div className="space-y-2">
+                          {GRADE_OPTIONS.map((item) => (
+                            <label
+                              key={item.value}
+                              className="flex items-center gap-2 text-sm"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={filters.grades.includes(item.value)}
+                                onChange={() =>
+                                  toggleStringFilter('grades', item.value)
+                                }
+                              />
+                              {item.label}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-ink/10 p-3">
+                        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink/50">
+                          Estados
+                        </div>
+                        <div className="space-y-2">
+                          {STATUS_OPTIONS.map((item) => (
+                            <label
+                              key={item.value}
+                              className="flex items-center gap-2 text-sm"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={filters.statuses.includes(item.value)}
+                                onChange={() =>
+                                  toggleStringFilter('statuses', item.value)
+                                }
+                              />
+                              {item.label}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-ink/10 p-3">
+                        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink/50">
+                          Deuda
+                        </div>
+                        <div className="space-y-2">
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={filters.debts.includes('WITH_DEBT')}
+                              onChange={() => toggleDebtFilter('WITH_DEBT')}
+                            />
+                            Con deuda
+                          </label>
+
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={filters.debts.includes('NO_DEBT')}
+                              onChange={() => toggleDebtFilter('NO_DEBT')}
+                            />
+                            Sin deuda
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    {hasCustomFilters() && (
+                      <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                        Hay filtros múltiples aplicados.
+                        <button
+                          type="button"
+                          onClick={clearCustomFilters}
+                          className="ml-3 font-semibold underline underline-offset-4"
+                        >
+                          Limpiar filtros
+                        </button>
+                      </div>
+                    )}
+
                     <div className="mb-4 flex flex-wrap gap-3">
                       <button
                         type="button"
@@ -1002,9 +1027,7 @@ export default function MessagingPage() {
 
                                   <button
                                     type="button"
-                                    onClick={() =>
-                                      handleMarkSent('custom', recipient.member.id)
-                                    }
+                                    onClick={() => handleMarkSent('custom', recipient.member.id)}
                                     disabled={isSending || !recipient.destination}
                                     className="rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
                                   >
@@ -1158,9 +1181,7 @@ export default function MessagingPage() {
 
                             <button
                               type="button"
-                              onClick={() =>
-                                handleMarkSent(activeCampaign, recipient.memberId)
-                              }
+                              onClick={() => handleMarkSent(activeCampaign, recipient.memberId)}
                               disabled={
                                 recipient.reminderSentThisMonth ||
                                 isSending ||
