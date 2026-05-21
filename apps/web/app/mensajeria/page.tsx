@@ -72,13 +72,87 @@ type WhatsappTemplate = {
   createdAt: string;
 };
 
+type Dispatch = {
+  id: string;
+  memberId: string | null;
+  templateId: string | null;
+  destination: string;
+  renderedBody: string;
+  status: string;
+  campaignCode: string | null;
+  createdAt: string;
+  member?: {
+    firstName: string;
+    lastName: string;
+    matricula: string;
+  } | null;
+  template?: {
+    name: string;
+  } | null;
+};
+
+type MemberStatement = {
+  member: {
+    id: string;
+    matricula: string;
+    firstName: string;
+    lastName: string;
+    category: string;
+    status: string;
+  };
+  summary: {
+    totalDebt: number;
+    monthsOwed: number;
+    owesCurrentMonth: boolean;
+    overdueMonthLabels: string[];
+    debtLevel: 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH';
+    debtLevelLabel: string;
+    debtColor: 'gray' | 'green' | 'yellow' | 'red';
+    months: Array<{
+      label: string;
+      category: string;
+      amount: number;
+      overdue: boolean;
+      isCurrentMonth: boolean;
+    }>;
+  };
+};
+
 type CustomRecipient = {
   member: Member;
+  statement: MemberStatement | null;
   destination: string;
   message: string;
   waUrl: string;
-  registered: boolean;
+  sent: boolean;
 };
+
+type CustomFilters = {
+  category: string;
+  grade: string;
+  status: string;
+  debt: 'ALL' | 'WITH_DEBT' | 'NO_DEBT';
+};
+
+const CATEGORY_OPTIONS = [
+  { value: 'SIMPLE', label: 'Simple' },
+  { value: 'DOBLE', label: 'Doble' },
+  { value: 'ESTUDIANTE', label: 'Estudiante' },
+  { value: 'SOCIAL', label: 'Social' },
+  { value: 'MENOR', label: 'Menor' },
+  { value: 'HONOR', label: 'Honor' },
+];
+
+const GRADE_OPTIONS = [
+  { value: 'APRENDIZ', label: 'Aprendiz' },
+  { value: 'COMPANERO', label: 'Compañero' },
+  { value: 'MAESTRO', label: 'Maestro' },
+];
+
+const STATUS_OPTIONS = [
+  { value: 'ACTIVE', label: 'Activo' },
+  { value: 'INACTIVE', label: 'Inactivo' },
+];
 
 function fmt(n: number) {
   return new Intl.NumberFormat('es-AR', {
@@ -103,30 +177,57 @@ function campaignTitle(code: CampaignCode) {
   return 'Mensaje personalizado';
 }
 
-function campaignDescription(code: CampaignCode) {
-  if (code === 'custom') {
-    return 'Creá mensajes personalizados, elegí destinatarios y guardá plantillas reutilizables.';
-  }
-
-  return code === 'initial-notice'
-    ? 'Esta campaña incluye a todos los socios que deban al menos una cuota. Se excluye a quienes no registran deuda y a los miembros de honor.'
-    : 'Esta campaña incluye a todos los socios que deban al menos una cuota. Se excluye a quienes no registran deuda y a los miembros de honor.';
+function categoryLabel(value: string) {
+  return CATEGORY_OPTIONS.find((item) => item.value === value)?.label ?? value;
 }
 
-function renderTemplate(template: string, member: Member) {
+function gradeLabel(value: string | null) {
+  if (!value) return '-';
+  return GRADE_OPTIONS.find((item) => item.value === value)?.label ?? value;
+}
+
+function statusLabel(value: string) {
+  return STATUS_OPTIONS.find((item) => item.value === value)?.label ?? value;
+}
+
+function formatDate(value: string) {
+  return value.slice(0, 10).split('-').reverse().join('/');
+}
+
+function formatDateTime(value: string) {
+  return new Date(value).toLocaleString('es-AR');
+}
+
+function renderTemplate(
+  template: string,
+  member: Member,
+  statement: MemberStatement | null,
+) {
   const greeting =
     member.grade === 'MAESTRO'
       ? `V.·.H.·. ${member.firstName}`
       : `Q.·.H.·. ${member.firstName}`;
 
+  const debtMonths = statement?.summary.months.map((m) => m.label).join(', ') ?? '';
+  const totalDebt = statement ? fmt(statement.summary.totalDebt) : '$0';
+  const monthsOwed = statement ? String(statement.summary.monthsOwed) : '0';
+  const currentMonthAmount =
+    statement?.summary.months.find((m) => m.isCurrentMonth)?.amount ?? 0;
+
   return template
+    .replaceAll('{saludo}', greeting)
     .replaceAll('{nombre}', member.firstName)
     .replaceAll('{apellido}', member.lastName)
     .replaceAll('{nombre_completo}', `${member.firstName} ${member.lastName}`)
     .replaceAll('{matricula}', member.matricula)
-    .replaceAll('{grado}', member.grade ?? '')
-    .replaceAll('{categoria}', member.category)
-    .replaceAll('{saludo}', greeting);
+    .replaceAll('{grado}', gradeLabel(member.grade))
+    .replaceAll('{categoria}', categoryLabel(member.category))
+    .replaceAll('{estado}', statusLabel(member.status))
+    .replaceAll('{celular}', member.phone ?? '')
+    .replaceAll('{monto_deuda}', totalDebt)
+    .replaceAll('{meses_adeudados}', debtMonths || 'sin meses adeudados')
+    .replaceAll('{cantidad_meses_adeudados}', monthsOwed)
+    .replaceAll('{monto_cuota_mes}', fmt(currentMonthAmount));
 }
 
 export default function MessagingPage() {
@@ -140,9 +241,17 @@ export default function MessagingPage() {
 
   const [members, setMembers] = useState<Member[]>([]);
   const [templates, setTemplates] = useState<WhatsappTemplate[]>([]);
+  const [dispatches, setDispatches] = useState<Dispatch[]>([]);
+  const [statements, setStatements] = useState<Record<string, MemberStatement>>({});
 
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [memberSearch, setMemberSearch] = useState('');
+  const [filters, setFilters] = useState<CustomFilters>({
+    category: '',
+    grade: '',
+    status: '',
+    debt: 'ALL',
+  });
 
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [customMessage, setCustomMessage] = useState('');
@@ -151,6 +260,9 @@ export default function MessagingPage() {
     name: '',
     body: '',
   });
+
+  const [historyMemberId, setHistoryMemberId] = useState('');
+  const [memberHistory, setMemberHistory] = useState<Dispatch[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [savingTemplate, setSavingTemplate] = useState(false);
@@ -161,26 +273,48 @@ export default function MessagingPage() {
   const [error, setError] = useState('');
 
   async function loadAll() {
-    const [initialData, reminderData, membersData, templatesData] =
+    const [initialData, reminderData, membersData, templatesData, dispatchData] =
       await Promise.all([
         api.get<CampaignPreview>('/whatsapp/campaigns/initial-notice'),
         api.get<CampaignPreview>('/whatsapp/campaigns/reminder'),
         api.get<Member[]>('/members'),
         api.get<WhatsappTemplate[]>('/whatsapp/templates'),
+        api.get<Dispatch[]>('/whatsapp/dispatches'),
       ]);
+
+    const sortedMembers = [...membersData].sort((a, b) =>
+      `${a.lastName} ${a.firstName}`.localeCompare(
+        `${b.lastName} ${b.firstName}`,
+        'es',
+        { sensitivity: 'base' },
+      ),
+    );
 
     setInitialCampaign(initialData);
     setReminderCampaign(reminderData);
-    setMembers(
-      [...membersData].sort((a, b) =>
-        `${a.lastName} ${a.firstName}`.localeCompare(
-          `${b.lastName} ${b.firstName}`,
-          'es',
-          { sensitivity: 'base' },
-        ),
-      ),
-    );
+    setMembers(sortedMembers);
     setTemplates(templatesData);
+    setDispatches(dispatchData);
+
+    const statementPairs = await Promise.all(
+      sortedMembers.map(async (member) => {
+        try {
+          const statement = await api.get<MemberStatement>(
+            `/members/${member.id}/account-statement`,
+          );
+          return [member.id, statement] as const;
+        } catch {
+          return [member.id, null] as const;
+        }
+      }),
+    );
+
+    const nextStatements: Record<string, MemberStatement> = {};
+    for (const [memberId, statement] of statementPairs) {
+      if (statement) nextStatements[memberId] = statement;
+    }
+
+    setStatements(nextStatements);
   }
 
   useEffect(() => {
@@ -196,37 +330,62 @@ export default function MessagingPage() {
   const campaign =
     activeCampaign === 'initial-notice' ? initialCampaign : reminderCampaign;
 
+  const sentCustomMemberIds = useMemo(() => {
+    return new Set(
+      dispatches
+        .filter((item) => item.campaignCode === 'custom')
+        .map((item) => item.memberId)
+        .filter((id): id is string => Boolean(id)),
+    );
+  }, [dispatches]);
+
   const filteredMembers = useMemo(() => {
     const query = memberSearch.trim().toLowerCase();
 
-    if (!query) return members;
+    return members.filter((member) => {
+      const statement = statements[member.id];
+      const hasDebt = (statement?.summary.monthsOwed ?? 0) > 0;
 
-    return members.filter((member) =>
-      `${member.lastName} ${member.firstName} ${member.matricula}`
-        .toLowerCase()
-        .includes(query),
-    );
-  }, [members, memberSearch]);
+      if (
+        query &&
+        !`${member.lastName} ${member.firstName} ${member.matricula} ${member.phone ?? ''}`
+          .toLowerCase()
+          .includes(query)
+      ) {
+        return false;
+      }
+
+      if (filters.category && member.category !== filters.category) return false;
+      if (filters.grade && (member.grade ?? '') !== filters.grade) return false;
+      if (filters.status && member.status !== filters.status) return false;
+      if (filters.debt === 'WITH_DEBT' && !hasDebt) return false;
+      if (filters.debt === 'NO_DEBT' && hasDebt) return false;
+
+      return true;
+    });
+  }, [members, memberSearch, filters, statements]);
 
   const customRecipients = useMemo<CustomRecipient[]>(() => {
     return members
       .filter((member) => selectedMemberIds.includes(member.id))
       .map((member) => {
+        const statement = statements[member.id] ?? null;
         const destination = normalizePhone(member.phone);
-        const message = renderTemplate(customMessage, member);
+        const message = renderTemplate(customMessage, member, statement);
         const waUrl = destination
           ? `https://wa.me/${destination}?text=${encodeURIComponent(message)}`
           : '';
 
         return {
           member,
+          statement,
           destination,
           message,
           waUrl,
-          registered: false,
+          sent: sentCustomMemberIds.has(member.id),
         };
       });
-  }, [members, selectedMemberIds, customMessage]);
+  }, [members, selectedMemberIds, customMessage, statements, sentCustomMemberIds]);
 
   function toggleMember(memberId: string) {
     setSelectedMemberIds((prev) =>
@@ -307,13 +466,8 @@ export default function MessagingPage() {
         isActive: false,
       });
 
-      if (selectedTemplateId === templateId) {
-        setSelectedTemplateId('');
-      }
-
-      if (templateForm.id === templateId) {
-        clearTemplateForm();
-      }
+      if (selectedTemplateId === templateId) setSelectedTemplateId('');
+      if (templateForm.id === templateId) clearTemplateForm();
 
       const updated = await api.get<WhatsappTemplate[]>('/whatsapp/templates');
       setTemplates(updated);
@@ -341,7 +495,11 @@ export default function MessagingPage() {
           destination: recipient.destination,
           message: recipient.message,
           templateId: selectedTemplateId || undefined,
+          campaignCode: 'custom',
         });
+
+        const updatedDispatches = await api.get<Dispatch[]>('/whatsapp/dispatches');
+        setDispatches(updatedDispatches);
       } else {
         await api.post(`/whatsapp/campaigns/${code}/mark-sent`, {
           memberId,
@@ -358,6 +516,18 @@ export default function MessagingPage() {
     } finally {
       setSending(null);
     }
+  }
+
+  async function loadMemberHistory(memberId: string) {
+    setHistoryMemberId(memberId);
+
+    if (!memberId) {
+      setMemberHistory([]);
+      return;
+    }
+
+    const history = await api.get<Dispatch[]>(`/whatsapp/members/${memberId}/history`);
+    setMemberHistory(history);
   }
 
   return (
@@ -384,7 +554,7 @@ export default function MessagingPage() {
       {activeCampaign === 'custom' ? (
         <SectionCard
           title="Mensaje personalizado"
-          description="Elegí socios, redactá un mensaje o usá una plantilla guardada. Variables disponibles: {saludo}, {nombre}, {apellido}, {nombre_completo}, {matricula}, {grado}, {categoria}."
+          description="Filtrá destinatarios, usá variables dinámicas, guardá plantillas y registrá envíos personalizados."
         >
           {loading ? (
             <div className="py-8 text-sm text-ink/60">Cargando...</div>
@@ -406,9 +576,74 @@ export default function MessagingPage() {
                     <input
                       value={memberSearch}
                       onChange={(e) => setMemberSearch(e.target.value)}
-                      placeholder="Buscar por apellido, nombre o matrícula"
+                      placeholder="Buscar por apellido, nombre, matrícula o celular"
                       className="mb-4 w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
                     />
+
+                    <div className="mb-4 grid gap-3 md:grid-cols-4">
+                      <select
+                        value={filters.category}
+                        onChange={(e) =>
+                          setFilters((prev) => ({
+                            ...prev,
+                            category: e.target.value,
+                          }))
+                        }
+                        className="rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                      >
+                        <option value="">Todas las categorías</option>
+                        {CATEGORY_OPTIONS.map((item) => (
+                          <option key={item.value} value={item.value}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </select>
+
+                      <select
+                        value={filters.grade}
+                        onChange={(e) =>
+                          setFilters((prev) => ({ ...prev, grade: e.target.value }))
+                        }
+                        className="rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                      >
+                        <option value="">Todos los grados</option>
+                        {GRADE_OPTIONS.map((item) => (
+                          <option key={item.value} value={item.value}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </select>
+
+                      <select
+                        value={filters.status}
+                        onChange={(e) =>
+                          setFilters((prev) => ({ ...prev, status: e.target.value }))
+                        }
+                        className="rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                      >
+                        <option value="">Todos los estados</option>
+                        {STATUS_OPTIONS.map((item) => (
+                          <option key={item.value} value={item.value}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </select>
+
+                      <select
+                        value={filters.debt}
+                        onChange={(e) =>
+                          setFilters((prev) => ({
+                            ...prev,
+                            debt: e.target.value as CustomFilters['debt'],
+                          }))
+                        }
+                        className="rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                      >
+                        <option value="ALL">Todos por deuda</option>
+                        <option value="WITH_DEBT">Con deuda</option>
+                        <option value="NO_DEBT">Sin deuda</option>
+                      </select>
+                    </div>
 
                     <div className="mb-4 flex flex-wrap gap-3">
                       <button
@@ -430,6 +665,8 @@ export default function MessagingPage() {
                     <div className="max-h-96 space-y-2 overflow-y-auto pr-2">
                       {filteredMembers.map((member) => {
                         const checked = selectedMemberIds.includes(member.id);
+                        const statement = statements[member.id];
+                        const hasDebt = (statement?.summary.monthsOwed ?? 0) > 0;
 
                         return (
                           <label
@@ -446,13 +683,21 @@ export default function MessagingPage() {
                               onChange={() => toggleMember(member.id)}
                               className="mt-1"
                             />
-                            <div>
+                            <div className="min-w-0 flex-1">
                               <div className="font-semibold text-ink">
                                 {memberName(member)}
                               </div>
                               <div className="text-xs text-ink/60">
                                 Matrícula {member.matricula} ·{' '}
-                                {member.phone || 'Sin celular'}
+                                {gradeLabel(member.grade)} ·{' '}
+                                {categoryLabel(member.category)} ·{' '}
+                                {statusLabel(member.status)}
+                              </div>
+                              <div className="mt-1 text-xs text-ink/60">
+                                {member.phone || 'Sin celular'} ·{' '}
+                                {hasDebt
+                                  ? `Debe ${fmt(statement.summary.totalDebt)}`
+                                  : 'Sin deuda'}
                               </div>
                             </div>
                           </label>
@@ -505,6 +750,15 @@ export default function MessagingPage() {
                         className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
                       />
 
+                      <div className="rounded-2xl bg-ink/5 p-3 text-xs leading-relaxed text-ink/70">
+                        Variables:{' '}
+                        {'{saludo}'}, {'{nombre}'}, {'{apellido}'},{' '}
+                        {'{nombre_completo}'}, {'{matricula}'}, {'{grado}'},{' '}
+                        {'{categoria}'}, {'{estado}'}, {'{celular}'},{' '}
+                        {'{monto_deuda}'}, {'{meses_adeudados}'},{' '}
+                        {'{cantidad_meses_adeudados}'}, {'{monto_cuota_mes}'}.
+                      </div>
+
                       <div className="flex flex-wrap gap-3">
                         <button
                           type="submit"
@@ -538,6 +792,51 @@ export default function MessagingPage() {
                       </div>
                     </form>
                   </div>
+
+                  <div className="rounded-2xl border border-ink/10 bg-white p-4">
+                    <div className="mb-4 text-lg font-semibold text-ink">
+                      Historial simple por H.·.
+                    </div>
+
+                    <select
+                      value={historyMemberId}
+                      onChange={(e) => loadMemberHistory(e.target.value)}
+                      className="mb-4 w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                    >
+                      <option value="">Seleccionar H.·.</option>
+                      {members.map((member) => (
+                        <option key={member.id} value={member.id}>
+                          {memberName(member)} — {member.matricula}
+                        </option>
+                      ))}
+                    </select>
+
+                    {memberHistory.length === 0 ? (
+                      <div className="text-sm text-ink/60">
+                        Sin historial seleccionado o sin envíos registrados.
+                      </div>
+                    ) : (
+                      <div className="max-h-80 space-y-3 overflow-y-auto">
+                        {memberHistory.map((item) => (
+                          <div
+                            key={item.id}
+                            className="rounded-2xl border border-ink/10 bg-ink/5 p-3 text-sm"
+                          >
+                            <div className="font-semibold text-ink">
+                              {item.campaignCode ?? 'Mensaje'}
+                              {item.template?.name ? ` · ${item.template.name}` : ''}
+                            </div>
+                            <div className="text-xs text-ink/60">
+                              {formatDateTime(item.createdAt)} · {item.status}
+                            </div>
+                            <div className="mt-2 whitespace-pre-wrap text-xs text-ink/80">
+                              {item.renderedBody}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-6">
@@ -553,12 +852,6 @@ export default function MessagingPage() {
                       placeholder="Escribí el mensaje personalizado"
                       className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
                     />
-
-                    <div className="mt-3 text-xs leading-relaxed text-ink/60">
-                      Variables: {'{saludo}'}, {'{nombre}'}, {'{apellido}'},{' '}
-                      {'{nombre_completo}'}, {'{matricula}'}, {'{grado}'},{' '}
-                      {'{categoria}'}.
-                    </div>
                   </div>
 
                   <div className="rounded-2xl border border-ink/10 bg-white p-4">
@@ -593,8 +886,16 @@ export default function MessagingPage() {
                                     {memberName(recipient.member)}
                                   </div>
                                   <div className="text-sm text-ink/60">
-                                    {recipient.destination || 'Sin celular'}
+                                    {recipient.destination || 'Sin celular'} ·{' '}
+                                    {recipient.statement?.summary.monthsOwed
+                                      ? `Debe ${fmt(recipient.statement.summary.totalDebt)}`
+                                      : 'Sin deuda'}
                                   </div>
+                                  {recipient.sent && (
+                                    <div className="mt-2 inline-flex rounded-xl border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
+                                      Ya tiene envío personalizado registrado
+                                    </div>
+                                  )}
                                 </div>
 
                                 <div className="flex flex-col gap-2">
@@ -616,19 +917,12 @@ export default function MessagingPage() {
                                   <button
                                     type="button"
                                     onClick={() =>
-                                      handleMarkSent(
-                                        'custom',
-                                        recipient.member.id,
-                                      )
+                                      handleMarkSent('custom', recipient.member.id)
                                     }
-                                    disabled={
-                                      isSending || !recipient.destination
-                                    }
+                                    disabled={isSending || !recipient.destination}
                                     className="rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
                                   >
-                                    {isSending
-                                      ? 'Registrando...'
-                                      : 'Registrar envío'}
+                                    {isSending ? 'Registrando...' : 'Registrar envío'}
                                   </button>
                                 </div>
                               </div>
@@ -650,7 +944,7 @@ export default function MessagingPage() {
       ) : (
         <SectionCard
           title={campaignTitle(activeCampaign)}
-          description={campaignDescription(activeCampaign)}
+          description="Campaña automática según deuda registrada. Se excluyen miembros de honor y quienes no correspondan."
         >
           {loading ? (
             <div className="py-8 text-sm text-ink/60">Cargando campaña...</div>
@@ -689,7 +983,7 @@ export default function MessagingPage() {
                     Generada
                   </div>
                   <div className="mt-2 text-sm font-semibold text-ink">
-                    {new Date(campaign.generatedAt).toLocaleString('es-AR')}
+                    {formatDateTime(campaign.generatedAt)}
                   </div>
                 </div>
               </div>
@@ -752,15 +1046,6 @@ export default function MessagingPage() {
                               </span>
                             </div>
 
-                            {activeCampaign === 'initial-notice' && (
-                              <div className="text-sm text-ink/70">
-                                Cuota base del mes actual:{' '}
-                                <span className="font-medium text-ink">
-                                  {fmt(recipient.debt.currentMonthAmount)}
-                                </span>
-                              </div>
-                            )}
-
                             <div className="text-sm text-ink/70">
                               Deuda estimada actual:{' '}
                               <span className="font-medium text-ink">
@@ -788,10 +1073,7 @@ export default function MessagingPage() {
                             <button
                               type="button"
                               onClick={() =>
-                                handleMarkSent(
-                                  activeCampaign,
-                                  recipient.memberId,
-                                )
+                                handleMarkSent(activeCampaign, recipient.memberId)
                               }
                               disabled={
                                 recipient.reminderSentThisMonth ||
