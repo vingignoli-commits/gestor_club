@@ -127,11 +127,13 @@ type CustomRecipient = {
   sent: boolean;
 };
 
+type DebtFilter = 'WITH_DEBT' | 'NO_DEBT';
+
 type CustomFilters = {
-  category: string;
-  grade: string;
-  status: string;
-  debt: 'ALL' | 'WITH_DEBT' | 'NO_DEBT';
+  categories: string[];
+  grades: string[];
+  statuses: string[];
+  debts: DebtFilter[];
 };
 
 const CATEGORY_OPTIONS = [
@@ -247,10 +249,10 @@ export default function MessagingPage() {
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [memberSearch, setMemberSearch] = useState('');
   const [filters, setFilters] = useState<CustomFilters>({
-    category: '',
-    grade: '',
-    status: '',
-    debt: 'ALL',
+    categories: [],
+    grades: [],
+    statuses: [],
+    debts: [],
   });
 
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
@@ -355,11 +357,34 @@ export default function MessagingPage() {
         return false;
       }
 
-      if (filters.category && member.category !== filters.category) return false;
-      if (filters.grade && (member.grade ?? '') !== filters.grade) return false;
-      if (filters.status && member.status !== filters.status) return false;
-      if (filters.debt === 'WITH_DEBT' && !hasDebt) return false;
-      if (filters.debt === 'NO_DEBT' && hasDebt) return false;
+      if (
+        filters.categories.length > 0 &&
+        !filters.categories.includes(member.category)
+      ) {
+        return false;
+      }
+      
+      if (
+        filters.grades.length > 0 &&
+        !filters.grades.includes(member.grade ?? '')
+      ) {
+        return false;
+      }
+      
+      if (
+        filters.statuses.length > 0 &&
+        !filters.statuses.includes(member.status)
+      ) {
+        return false;
+      }
+      
+      if (filters.debts.length > 0) {
+        const matchesDebt =
+          (filters.debts.includes('WITH_DEBT') && hasDebt) ||
+          (filters.debts.includes('NO_DEBT') && !hasDebt);
+      
+        if (!matchesDebt) return false;
+      }
 
       return true;
     });
@@ -529,7 +554,40 @@ export default function MessagingPage() {
     const history = await api.get<Dispatch[]>(`/whatsapp/members/${memberId}/history`);
     setMemberHistory(history);
   }
-
+  function toggleArrayFilter<K extends keyof CustomFilters>(
+    key: K,
+    value: CustomFilters[K][number],
+  ) {
+    setFilters((prev) => {
+      const current = prev[key];
+  
+      return {
+        ...prev,
+        [key]: current.includes(value)
+          ? current.filter((item) => item !== value)
+          : [...current, value],
+      };
+    });
+  }
+  
+  function clearCustomFilters() {
+    setFilters({
+      categories: [],
+      grades: [],
+      statuses: [],
+      debts: [],
+    });
+  }
+  
+  function hasCustomFilters() {
+    return (
+      filters.categories.length > 0 ||
+      filters.grades.length > 0 ||
+      filters.statuses.length > 0 ||
+      filters.debts.length > 0
+    );
+  }
+  
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap gap-3">
@@ -580,71 +638,99 @@ export default function MessagingPage() {
                       className="mb-4 w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
                     />
 
-                    <div className="mb-4 grid gap-3 md:grid-cols-4">
-                      <select
-                        value={filters.category}
-                        onChange={(e) =>
-                          setFilters((prev) => ({
-                            ...prev,
-                            category: e.target.value,
-                          }))
-                        }
-                        className="rounded-2xl border border-ink/10 px-4 py-3 text-sm"
-                      >
-                        <option value="">Todas las categorías</option>
-                        {CATEGORY_OPTIONS.map((item) => (
-                          <option key={item.value} value={item.value}>
-                            {item.label}
-                          </option>
-                        ))}
-                      </select>
-
-                      <select
-                        value={filters.grade}
-                        onChange={(e) =>
-                          setFilters((prev) => ({ ...prev, grade: e.target.value }))
-                        }
-                        className="rounded-2xl border border-ink/10 px-4 py-3 text-sm"
-                      >
-                        <option value="">Todos los grados</option>
-                        {GRADE_OPTIONS.map((item) => (
-                          <option key={item.value} value={item.value}>
-                            {item.label}
-                          </option>
-                        ))}
-                      </select>
-
-                      <select
-                        value={filters.status}
-                        onChange={(e) =>
-                          setFilters((prev) => ({ ...prev, status: e.target.value }))
-                        }
-                        className="rounded-2xl border border-ink/10 px-4 py-3 text-sm"
-                      >
-                        <option value="">Todos los estados</option>
-                        {STATUS_OPTIONS.map((item) => (
-                          <option key={item.value} value={item.value}>
-                            {item.label}
-                          </option>
-                        ))}
-                      </select>
-
-                      <select
-                        value={filters.debt}
-                        onChange={(e) =>
-                          setFilters((prev) => ({
-                            ...prev,
-                            debt: e.target.value as CustomFilters['debt'],
-                          }))
-                        }
-                        className="rounded-2xl border border-ink/10 px-4 py-3 text-sm"
-                      >
-                        <option value="ALL">Todos por deuda</option>
-                        <option value="WITH_DEBT">Con deuda</option>
-                        <option value="NO_DEBT">Sin deuda</option>
-                      </select>
-                    </div>
-
+              <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-2xl border border-ink/10 p-3">
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink/50">
+                    Categorías
+                  </div>
+                  <div className="space-y-2">
+                    {CATEGORY_OPTIONS.map((item) => (
+                      <label key={item.value} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={filters.categories.includes(item.value)}
+                          onChange={() => toggleArrayFilter('categories', item.value)}
+                        />
+                        {item.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              
+                <div className="rounded-2xl border border-ink/10 p-3">
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink/50">
+                    Grados
+                  </div>
+                  <div className="space-y-2">
+                    {GRADE_OPTIONS.map((item) => (
+                      <label key={item.value} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={filters.grades.includes(item.value)}
+                          onChange={() => toggleArrayFilter('grades', item.value)}
+                        />
+                        {item.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              
+                <div className="rounded-2xl border border-ink/10 p-3">
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink/50">
+                    Estados
+                  </div>
+                  <div className="space-y-2">
+                    {STATUS_OPTIONS.map((item) => (
+                      <label key={item.value} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={filters.statuses.includes(item.value)}
+                          onChange={() => toggleArrayFilter('statuses', item.value)}
+                        />
+                        {item.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              
+                <div className="rounded-2xl border border-ink/10 p-3">
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink/50">
+                    Deuda
+                  </div>
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={filters.debts.includes('WITH_DEBT')}
+                        onChange={() => toggleArrayFilter('debts', 'WITH_DEBT')}
+                      />
+                      Con deuda
+                    </label>
+              
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={filters.debts.includes('NO_DEBT')}
+                        onChange={() => toggleArrayFilter('debts', 'NO_DEBT')}
+                      />
+                      Sin deuda
+                    </label>
+                  </div>
+                </div>
+              </div>
+              
+              {hasCustomFilters() && (
+                <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  Hay filtros múltiples aplicados.
+                  <button
+                    type="button"
+                    onClick={clearCustomFilters}
+                    className="ml-3 font-semibold underline underline-offset-4"
+                  >
+                    Limpiar filtros
+                  </button>
+                </div>
+              )}
                     <div className="mb-4 flex flex-wrap gap-3">
                       <button
                         type="button"
