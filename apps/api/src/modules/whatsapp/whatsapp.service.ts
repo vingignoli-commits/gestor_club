@@ -79,6 +79,28 @@ export class WhatsappService {
     });
   }
 
+  getDispatches() {
+    return this.prisma.messageDispatch.findMany({
+      include: {
+        member: true,
+        template: true,
+      },
+      orderBy: [{ createdAt: 'desc' }],
+      take: 200,
+    });
+  }
+
+  getMemberHistory(memberId: string) {
+    return this.prisma.messageDispatch.findMany({
+      where: { memberId },
+      include: {
+        template: true,
+      },
+      orderBy: [{ createdAt: 'desc' }],
+      take: 50,
+    });
+  }
+
   async createTemplate(name: string, body: string) {
     const cleanName = name.trim();
     const cleanBody = body.trim();
@@ -149,9 +171,7 @@ export class WhatsappService {
       },
     });
 
-    if (existingDispatch) {
-      return existingDispatch;
-    }
+    if (existingDispatch) return existingDispatch;
 
     const campaign =
       campaignCode === 'initial-notice'
@@ -190,6 +210,7 @@ export class WhatsappService {
     destination: string,
     message?: string,
     templateId?: string,
+    campaignCode?: string,
   ) {
     const member = await this.prisma.member.findUnique({
       where: { id: memberId },
@@ -221,6 +242,7 @@ export class WhatsappService {
           destination,
           renderedBody,
           status: 'PENDING',
+          campaignCode: campaignCode?.trim() || 'custom',
         },
         include: {
           member: true,
@@ -239,6 +261,7 @@ export class WhatsappService {
         destination,
         renderedBody,
         status: 'PENDING',
+        campaignCode: campaignCode?.trim() || 'custom',
       },
       include: {
         member: true,
@@ -508,23 +531,17 @@ export class WhatsappService {
       const monthEnd = this.addMonths(monthStart, 1);
       const isCurrentMonth = monthStart.getTime() === queryMonthStart.getTime();
 
-      if (!this.isActiveInMonth(member, monthStart, monthEnd)) {
-        continue;
-      }
+      if (!this.isActiveInMonth(member, monthStart, monthEnd)) continue;
 
       const category = this.resolveCategoryForMonth(member, monthStart, monthEnd);
-      if (!category) {
-        continue;
-      }
+      if (!category) continue;
 
       const key = this.periodKey(
         monthStart.getUTCFullYear(),
         monthStart.getUTCMonth() + 1,
       );
 
-      if (paidPeriods.has(key)) {
-        continue;
-      }
+      if (paidPeriods.has(key)) continue;
 
       months.push({
         label: this.monthLabel(
