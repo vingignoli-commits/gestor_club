@@ -11,13 +11,7 @@ export class WhatsappController {
   }
 
   @Post('templates')
-  createTemplate(
-    @Body()
-    body: {
-      name: string;
-      body: string;
-    },
-  ) {
+  createTemplate(@Body() body: { name: string; body: string }) {
     return this.whatsappService.createTemplate(body.name, body.body);
   }
 
@@ -34,18 +28,23 @@ export class WhatsappController {
     return this.whatsappService.updateTemplate(id, body);
   }
 
+  @Get('dispatches')
+  getDispatches() {
+    return this.whatsappService.getDispatches();
+  }
+
+  @Get('members/:memberId/history')
+  getMemberHistory(@Param('memberId') memberId: string) {
+    return this.whatsappService.getMemberHistory(memberId);
+  }
+
   @Get('campaigns/initial-notice')
   getInitialNoticeCampaign() {
     return this.whatsappService.getInitialNoticeCampaign();
   }
 
   @Post('campaigns/initial-notice/mark-sent')
-  markInitialNoticeSent(
-    @Body()
-    body: {
-      memberId: string;
-    },
-  ) {
+  markInitialNoticeSent(@Body() body: { memberId: string }) {
     return this.whatsappService.markCampaignSent('initial-notice', body.memberId);
   }
 
@@ -55,12 +54,7 @@ export class WhatsappController {
   }
 
   @Post('campaigns/reminder/mark-sent')
-  markReminderSent(
-    @Body()
-    body: {
-      memberId: string;
-    },
-  ) {
+  markReminderSent(@Body() body: { memberId: string }) {
     return this.whatsappService.markCampaignSent('reminder', body.memberId);
   }
 
@@ -72,6 +66,7 @@ export class WhatsappController {
       templateId?: string;
       destination: string;
       message?: string;
+      campaignCode?: string;
     },
   ) {
     return this.whatsappService.sendMessage(
@@ -79,6 +74,7 @@ export class WhatsappController {
       body.destination,
       body.message,
       body.templateId,
+      body.campaignCode,
     );
   }
 }
