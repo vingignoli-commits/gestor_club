@@ -88,7 +88,7 @@ export class ReportsService {
           months: snapshot.months,
         };
       })
-      .filter((member) => member.monthsOwed > 0)
+      .filter((member) => member.debt > 0)
       .sort((a, b) => {
         if (b.debt !== a.debt) return b.debt - a.debt;
         return b.monthsOwed - a.monthsOwed;
