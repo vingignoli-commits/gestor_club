@@ -13,7 +13,7 @@ type DebtorMonth = {
   category: string;
   amount: number;
   overdue: boolean;
-  isCurrentMonth: boolean;
+  isCurrentMonth: boolean;Ingresos de este mes - {financial.currentMonth}
 };
 
 type Debtor = {
@@ -959,6 +959,7 @@ export default function ReportsPage() {
                     <div className="rounded-2xl border border-ink/10 bg-accent/10 p-4">
                       <div className="text-xs uppercase tracking-wide text-ink/50">
                         Saldo Caja
+                        <InfoHint text="Ingresos registrados menos egresos registrados, excluyendo movimientos anulados." />
                       </div>
                       <div className="mt-2 text-2xl font-bold text-accent">
                         {fmt(financial.cashBalance)}
@@ -968,6 +969,7 @@ export default function ReportsPage() {
                     <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
                       <div className="text-xs uppercase tracking-wide text-ink/50">
                         Activos por cobrar
+                        <InfoHint text="Dinero disponible según movimientos de caja registrados y no anulados." />
                       </div>
                       <div className="mt-2 text-2xl font-bold text-ink">
                         {fmt(financial.accountsReceivable)}
@@ -977,6 +979,7 @@ export default function ReportsPage() {
                     <div className="rounded-2xl border border-ink/10 bg-rose-50 p-4">
                       <div className="text-xs uppercase tracking-wide text-ink/50">
                         Pasivos estimados
+                        
                       </div>
                       <div className="mt-2 text-2xl font-bold text-rose-700">
                         {fmt(financial.liabilities)}
@@ -996,7 +999,7 @@ export default function ReportsPage() {
                   <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                     <div className="rounded-2xl border border-ink/10 bg-emerald-50 p-4">
                       <div className="text-xs uppercase tracking-wide text-ink/50">
-                        Ingresos del mes
+                        Ingresos de este mes - {financial.currentMonth}
                       </div>
                       <div className="mt-2 text-2xl font-bold text-emerald-700">
                         {fmt(financial.monthlyIncome)}
@@ -1005,7 +1008,7 @@ export default function ReportsPage() {
 
                     <div className="rounded-2xl border border-ink/10 bg-rose-50 p-4">
                       <div className="text-xs uppercase tracking-wide text-ink/50">
-                        Egresos del mes
+                        Egresos de este mes - {financial.currentMonth}
                       </div>
                       <div className="mt-2 text-2xl font-bold text-rose-700">
                         {fmt(financial.monthlyExpenses)}
