@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { SectionCard } from '../../components/section-card';
 import { api } from '../../lib/api';
 
+type Tab = 'financiero' | 'deudores' | 'recaudacion' | 'categorias';
+
 type DebtorMonth = {
   periodYear: number;
   periodMonth: number;
@@ -35,6 +37,7 @@ type Debtor = {
 
 type MonthlyCollection = {
   month: string;
+  period?: string;
   total: number;
 };
 
@@ -45,12 +48,137 @@ type CategorySummary = {
   total: number;
 };
 
+type FinancialSummary = {
+  generatedAt: string;
+  currentMonth: string;
+  currentPeriod: string;
+
+  cashBalance: number;
+  monthlyIncome: number;
+  monthlyExpenses: number;
+  monthlyNet: number;
+
+  liabilities: number;
+  accountsReceivable: number;
+  debtorsCount: number;
+  debtorsPercentage: number;
+  averageDebtPerDebtor: number;
+
+  activeMembers: number;
+  inactiveMembers: number;
+  totalMembers: number;
+
+  averageMonthlyCollection: number;
+  averageExpense: number;
+  monthlyBurnRate: number;
+  monthsOfCoverage: number | null;
+
+  collectionHistory: Array<{
+    period: string;
+    label: string;
+    total: number;
+  }>;
+
+  expenseHistory: Array<{
+    period: string;
+    label: string;
+    total: number;
+  }>;
+
+  debtAging: {
+    oneMonth: number;
+    twoToThree: number;
+    fourToSix: number;
+    overSix: number;
+  };
+
+  categoryIncome: Array<{
+    category: string;
+    total: number;
+  }>;
+
+  categoryExpense: Array<{
+    category: string;
+    total: number;
+  }>;
+
+  categoryExpectedCollection: Array<{
+    category: string;
+    activeMembers: number;
+    unitAmount: number;
+    expectedTotal: number;
+  }>;
+
+  topDebtors: Array<{
+    id: string;
+    fullName: string;
+    matricula: string;
+    category: string;
+    status: string;
+    totalDebt: number;
+    monthsOwed: number;
+    overdueMonthsCount: number;
+    debtLevel: string;
+    debtLevelLabel: string;
+  }>;
+
+  monthlyComparison: Array<{
+    period: string;
+    label: string;
+    income: number;
+    expense: number;
+    net: number;
+  }>;
+
+  expectedCurrentMonthCollection: number;
+  currentMonthCollection: number;
+  collectionEffectiveness: number;
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  SIMPLE: 'Simple',
+  DOBLE: 'Doble',
+  ESTUDIANTE: 'Estudiante',
+  SOCIAL: 'Social',
+  MENOR: 'Menor',
+  HONOR: 'Honor',
+};
+
+const INCOME_LABELS: Record<string, string> = {
+  MEMBERSHIP: 'Cuotas',
+  SALE: 'Ventas',
+  DONATION: 'Donaciones',
+  TRAINING: 'Capacitaciones',
+  OTHER: 'Otros ingresos',
+};
+
+const EXPENSE_LABELS: Record<string, string> = {
+  GRAN_LOGIA: 'Cuota GRAN LOGIA',
+  CIVIL_ARMONIA: 'Cuota Civil Armonía',
+  SUPPLIES: 'Insumos',
+  SERVICES: 'Servicios',
+  SALARY: 'Salarios',
+  MAINTENANCE: 'Mantenimiento',
+  OTHER: 'Otros egresos',
+};
+
+const DEBT_BADGE_STYLES: Record<Debtor['debtColor'], string> = {
+  gray: 'bg-slate-100 text-slate-700 border-slate-200',
+  green: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  yellow: 'bg-amber-100 text-amber-700 border-amber-200',
+  red: 'bg-rose-100 text-rose-700 border-rose-200',
+};
+
 function fmt(n: number) {
   return new Intl.NumberFormat('es-AR', {
     style: 'currency',
     currency: 'ARS',
     maximumFractionDigits: 0,
-  }).format(n);
+  }).format(Number(n || 0));
+}
+
+function fmtPercent(n: number) {
+  return `${Number(n || 0).toFixed(1)}%`;
 }
 
 function escapeHtml(value: string | number | null | undefined) {
@@ -62,33 +190,37 @@ function escapeHtml(value: string | number | null | undefined) {
     .replaceAll("'", '&#039;');
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
-  SIMPLE: 'Simple',
-  DOBLE: 'Doble',
-  ESTUDIANTE: 'Estudiante',
-  SOCIAL: 'Social',
-  MENOR: 'Menor',
-  HONOR: 'Honor',
-};
+function categoryLabel(value: string) {
+  return CATEGORY_LABELS[value] ?? value;
+}
 
-const DEBT_BADGE_STYLES: Record<Debtor['debtColor'], string> = {
-  gray: 'bg-slate-100 text-slate-700 border-slate-200',
-  green: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  yellow: 'bg-amber-100 text-amber-700 border-amber-200',
-  red: 'bg-rose-100 text-rose-700 border-rose-200',
-};
+function incomeLabel(value: string) {
+  return INCOME_LABELS[value] ?? value;
+}
+
+function expenseLabel(value: string) {
+  return EXPENSE_LABELS[value] ?? value;
+}
+
+function signedTone(value: number) {
+  if (value > 0) return 'text-emerald-700';
+  if (value < 0) return 'text-rose-700';
+  return 'text-ink';
+}
+
+function barWidth(value: number, max: number) {
+  if (max <= 0) return '0%';
+  return `${Math.min(100, Math.max(0, (value / max) * 100))}%`;
+}
 
 export default function ReportsPage() {
-  const [tab, setTab] = useState<'deudores' | 'recaudacion' | 'categorias'>(
-    'deudores',
-  );
+  const [tab, setTab] = useState<Tab>('financiero');
   const [debtors, setDebtors] = useState<Debtor[]>([]);
   const [monthly, setMonthly] = useState<MonthlyCollection[]>([]);
   const [categories, setCategories] = useState<CategorySummary[]>([]);
+  const [financial, setFinancial] = useState<FinancialSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [categoryValues, setCategoryValues] = useState<Record<string, string>>(
-    {},
-  );
+  const [categoryValues, setCategoryValues] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setLoading(true);
@@ -97,11 +229,13 @@ export default function ReportsPage() {
       api.get<Debtor[]>('/reports/debtors'),
       api.get<MonthlyCollection[]>('/reports/monthly-collection'),
       api.get<CategorySummary[]>('/reports/members-by-category'),
+      api.get<FinancialSummary>('/reports/financial-summary'),
     ])
-      .then(([d, m, c]) => {
+      .then(([d, m, c, f]) => {
         setDebtors(d);
         setMonthly(m);
         setCategories(c);
+        setFinancial(f);
 
         setCategoryValues((prev) => {
           const next = { ...prev };
@@ -134,19 +268,36 @@ export default function ReportsPage() {
   }, [categories, categoryValues]);
 
   const totalCategoryProjection = useMemo(() => {
-    return categoryCalculationRows.reduce(
-      (sum, row) => sum + row.totalValue,
-      0,
-    );
+    return categoryCalculationRows.reduce((sum, row) => sum + row.totalValue, 0);
   }, [categoryCalculationRows]);
 
+  const maxMonthlyValue = useMemo(() => {
+    if (!financial) return 0;
+
+    return Math.max(
+      ...financial.monthlyComparison.map((item) =>
+        Math.max(item.income, item.expense),
+      ),
+      0,
+    );
+  }, [financial]);
+
   function reportTitle() {
+    if (tab === 'financiero') return 'Reporte financiero general';
     if (tab === 'deudores') return 'Reporte de socios deudores';
     if (tab === 'recaudacion') return 'Reporte de recaudación mensual';
     return 'Reporte de socios por categoría';
   }
 
   function reportCriteria() {
+    if (tab === 'financiero') {
+      return [
+        'Fuente: caja, pagos, cuotas vigentes, padrón activo e historial de deuda.',
+        'Criterio: consolidación financiera a la fecha de emisión.',
+        'Incluye: saldo de caja, activos por cobrar, pasivos estimados, flujo mensual, morosidad y cobranza efectiva.',
+      ];
+    }
+
     if (tab === 'deudores') {
       return [
         'Fuente: cuotas registradas, socios activos y valores vigentes de categoría.',
@@ -173,15 +324,8 @@ export default function ReportsPage() {
   function pdfStyles() {
     return `
       <style>
-        @page {
-          size: A4;
-          margin: 16mm 14mm 18mm;
-        }
-
-        * {
-          box-sizing: border-box;
-        }
-
+        @page { size: A4; margin: 16mm 14mm 18mm; }
+        * { box-sizing: border-box; }
         body {
           margin: 0;
           font-family: Arial, Helvetica, sans-serif;
@@ -190,11 +334,7 @@ export default function ReportsPage() {
           font-size: 11px;
           line-height: 1.35;
         }
-
-        .page {
-          width: 100%;
-        }
-
+        .page { width: 100%; }
         .header {
           display: grid;
           grid-template-columns: 1fr auto;
@@ -204,7 +344,6 @@ export default function ReportsPage() {
           padding-bottom: 14px;
           margin-bottom: 18px;
         }
-
         .institution {
           font-family: Georgia, serif;
           font-size: 20px;
@@ -213,7 +352,6 @@ export default function ReportsPage() {
           text-transform: uppercase;
           white-space: nowrap;
         }
-
         .subtitle {
           margin-top: 4px;
           font-size: 11px;
@@ -221,7 +359,6 @@ export default function ReportsPage() {
           text-transform: uppercase;
           letter-spacing: 0.08em;
         }
-
         .meta-box {
           border: 1px solid #d1d5db;
           border-radius: 10px;
@@ -229,32 +366,16 @@ export default function ReportsPage() {
           min-width: 180px;
           font-size: 10px;
         }
-
         .meta-row {
           display: flex;
           justify-content: space-between;
           gap: 10px;
           margin-bottom: 4px;
         }
-
-        .meta-row:last-child {
-          margin-bottom: 0;
-        }
-
-        .meta-label {
-          color: #6b7280;
-        }
-
-        .meta-value {
-          font-weight: 700;
-          text-align: right;
-        }
-
-        h1 {
-          font-size: 18px;
-          margin: 0 0 10px;
-        }
-
+        .meta-row:last-child { margin-bottom: 0; }
+        .meta-label { color: #6b7280; }
+        .meta-value { font-weight: 700; text-align: right; }
+        h1 { font-size: 18px; margin: 0 0 10px; }
         .criteria {
           border: 1px solid #e5e7eb;
           background: #f9fafb;
@@ -262,7 +383,6 @@ export default function ReportsPage() {
           padding: 10px 12px;
           margin-bottom: 16px;
         }
-
         .criteria-title {
           font-weight: 700;
           margin-bottom: 6px;
@@ -271,30 +391,21 @@ export default function ReportsPage() {
           color: #374151;
           letter-spacing: 0.05em;
         }
-
-        .criteria ul {
-          margin: 0;
-          padding-left: 16px;
-        }
-
-        .criteria li {
-          margin-bottom: 3px;
-        }
-
+        .criteria ul { margin: 0; padding-left: 16px; }
+        .criteria li { margin-bottom: 3px; }
         .summary {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
           gap: 10px;
           margin-bottom: 16px;
         }
-
+        .summary-4 { grid-template-columns: repeat(4, 1fr); }
         .box {
           border: 1px solid #e5e7eb;
           border-radius: 12px;
           padding: 10px;
           min-height: 58px;
         }
-
         .box-label {
           color: #6b7280;
           font-size: 9px;
@@ -302,12 +413,10 @@ export default function ReportsPage() {
           letter-spacing: 0.06em;
           margin-bottom: 5px;
         }
-
         .box-value {
           font-size: 16px;
           font-weight: 800;
         }
-
         .section-title {
           font-size: 13px;
           font-weight: 800;
@@ -315,23 +424,14 @@ export default function ReportsPage() {
           text-transform: uppercase;
           letter-spacing: 0.04em;
         }
-
         table {
           width: 100%;
           border-collapse: collapse;
           margin-top: 8px;
           page-break-inside: auto;
         }
-
-        thead {
-          display: table-header-group;
-        }
-
-        tr {
-          page-break-inside: avoid;
-          page-break-after: auto;
-        }
-
+        thead { display: table-header-group; }
+        tr { page-break-inside: avoid; page-break-after: auto; }
         th {
           text-align: left;
           background: #f3f4f6;
@@ -341,18 +441,15 @@ export default function ReportsPage() {
           text-transform: uppercase;
           letter-spacing: 0.04em;
         }
-
         td {
           border: 1px solid #e5e7eb;
           padding: 7px;
           vertical-align: top;
         }
-
         tfoot td {
           background: #f9fafb;
           font-weight: 800;
         }
-
         .footer {
           margin-top: 34px;
           display: grid;
@@ -360,24 +457,20 @@ export default function ReportsPage() {
           gap: 40px;
           page-break-inside: avoid;
         }
-
         .signature {
           padding-top: 34px;
           text-align: center;
         }
-
         .signature-line {
           border-top: 1px solid #111827;
           padding-top: 8px;
           font-weight: 700;
         }
-
         .signature-role {
           margin-top: 3px;
           color: #6b7280;
           font-size: 10px;
         }
-
         .legal-note {
           margin-top: 24px;
           color: #6b7280;
@@ -385,21 +478,10 @@ export default function ReportsPage() {
           border-top: 1px solid #e5e7eb;
           padding-top: 8px;
         }
-
-        .amount {
-          text-align: right;
-          white-space: nowrap;
-        }
-
-        .center {
-          text-align: center;
-        }
-
+        .amount { text-align: right; white-space: nowrap; }
+        .center { text-align: center; }
         @media print {
-          body {
-            print-color-adjust: exact;
-            -webkit-print-color-adjust: exact;
-          }
+          body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
         }
       </style>
     `;
@@ -479,7 +561,153 @@ export default function ReportsPage() {
     `;
   }
 
+  function buildFinancialPdfHtml() {
+    if (!financial) {
+      return buildPdfShell('<p>No hay información financiera disponible.</p>');
+    }
+
+    const monthlyRows = financial.monthlyComparison
+      .map(
+        (item) => `
+          <tr>
+            <td>${escapeHtml(item.label)}</td>
+            <td class="amount">${escapeHtml(fmt(item.income))}</td>
+            <td class="amount">${escapeHtml(fmt(item.expense))}</td>
+            <td class="amount">${escapeHtml(fmt(item.net))}</td>
+          </tr>
+        `,
+      )
+      .join('');
+
+    const debtorRows = financial.topDebtors
+      .map(
+        (item) => `
+          <tr>
+            <td>${escapeHtml(item.fullName)}</td>
+            <td>${escapeHtml(item.matricula)}</td>
+            <td>${escapeHtml(categoryLabel(item.category))}</td>
+            <td class="center">${escapeHtml(item.monthsOwed)}</td>
+            <td class="amount">${escapeHtml(fmt(item.totalDebt))}</td>
+          </tr>
+        `,
+      )
+      .join('');
+
+    const expectedRows = financial.categoryExpectedCollection
+      .map(
+        (item) => `
+          <tr>
+            <td>${escapeHtml(categoryLabel(item.category))}</td>
+            <td class="center">${escapeHtml(item.activeMembers)}</td>
+            <td class="amount">${escapeHtml(fmt(item.unitAmount))}</td>
+            <td class="amount">${escapeHtml(fmt(item.expectedTotal))}</td>
+          </tr>
+        `,
+      )
+      .join('');
+
+    return buildPdfShell(`
+      <section class="summary summary-4">
+        <div class="box">
+          <div class="box-label">Saldo caja</div>
+          <div class="box-value">${fmt(financial.cashBalance)}</div>
+        </div>
+        <div class="box">
+          <div class="box-label">Activos por cobrar</div>
+          <div class="box-value">${fmt(financial.accountsReceivable)}</div>
+        </div>
+        <div class="box">
+          <div class="box-label">Pasivos estimados</div>
+          <div class="box-value">${fmt(financial.liabilities)}</div>
+        </div>
+        <div class="box">
+          <div class="box-label">% deudores</div>
+          <div class="box-value">${fmtPercent(financial.debtorsPercentage)}</div>
+        </div>
+      </section>
+
+      <section class="summary summary-4">
+        <div class="box">
+          <div class="box-label">Ingresos mes</div>
+          <div class="box-value">${fmt(financial.monthlyIncome)}</div>
+        </div>
+        <div class="box">
+          <div class="box-label">Egresos mes</div>
+          <div class="box-value">${fmt(financial.monthlyExpenses)}</div>
+        </div>
+        <div class="box">
+          <div class="box-label">Resultado neto</div>
+          <div class="box-value">${fmt(financial.monthlyNet)}</div>
+        </div>
+        <div class="box">
+          <div class="box-label">Cobranza efectiva</div>
+          <div class="box-value">${fmtPercent(financial.collectionEffectiveness)}</div>
+        </div>
+      </section>
+
+      <div class="section-title">Recaudación esperada del mes</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Categoría</th>
+            <th>HH.·. activos</th>
+            <th>Valor unitario</th>
+            <th>Esperado</th>
+          </tr>
+        </thead>
+        <tbody>${expectedRows}</tbody>
+      </table>
+
+      <div class="section-title">Ingresos vs egresos recientes</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Mes</th>
+            <th>Ingresos</th>
+            <th>Egresos</th>
+            <th>Neto</th>
+          </tr>
+        </thead>
+        <tbody>${monthlyRows}</tbody>
+      </table>
+
+      <div class="section-title">Antigüedad de deuda</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Rango</th>
+            <th>Monto</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>1 mes</td><td class="amount">${fmt(financial.debtAging.oneMonth)}</td></tr>
+          <tr><td>2 a 3 meses</td><td class="amount">${fmt(financial.debtAging.twoToThree)}</td></tr>
+          <tr><td>4 a 6 meses</td><td class="amount">${fmt(financial.debtAging.fourToSix)}</td></tr>
+          <tr><td>Más de 6 meses</td><td class="amount">${fmt(financial.debtAging.overSix)}</td></tr>
+        </tbody>
+      </table>
+
+      <div class="section-title">Principales deudores</div>
+      <table>
+        <thead>
+          <tr>
+            <th>H.·.</th>
+            <th>Matrícula</th>
+            <th>Categoría</th>
+            <th>Meses</th>
+            <th>Deuda</th>
+          </tr>
+        </thead>
+        <tbody>${debtorRows}</tbody>
+      </table>
+    `);
+  }
+
   function buildPdfHtml() {
+    if (tab === 'financiero') {
+      return buildFinancialPdfHtml();
+    }
+
     if (tab === 'deudores') {
       const rows = debtors
         .map(
@@ -487,7 +715,7 @@ export default function ReportsPage() {
             <tr>
               <td>${escapeHtml(debtor.lastName)}, ${escapeHtml(debtor.firstName)}</td>
               <td>${escapeHtml(debtor.matricula)}</td>
-              <td>${escapeHtml(CATEGORY_LABELS[debtor.category] ?? debtor.category)}</td>
+              <td>${escapeHtml(categoryLabel(debtor.category))}</td>
               <td>${escapeHtml(debtor.debtLevelLabel)}</td>
               <td class="center">${escapeHtml(debtor.monthsOwed)}</td>
               <td>${escapeHtml(debtor.overdueMonthLabels.join(', ') || '-')}</td>
@@ -574,7 +802,7 @@ export default function ReportsPage() {
       .map(
         (category) => `
           <tr>
-            <td>${escapeHtml(CATEGORY_LABELS[category.category] ?? category.category)}</td>
+            <td>${escapeHtml(categoryLabel(category.category))}</td>
             <td class="center">${escapeHtml(category.active)}</td>
             <td class="center">${escapeHtml(category.inactive)}</td>
             <td class="center">${escapeHtml(category.total)}</td>
@@ -587,7 +815,7 @@ export default function ReportsPage() {
       .map(
         (row) => `
           <tr>
-            <td>${escapeHtml(CATEGORY_LABELS[row.category] ?? row.category)}</td>
+            <td>${escapeHtml(categoryLabel(row.category))}</td>
             <td class="center">${escapeHtml(row.activeMembers)}</td>
             <td class="amount">${escapeHtml(fmt(row.unitValue))}</td>
             <td class="amount">${escapeHtml(fmt(row.totalValue))}</td>
@@ -665,24 +893,28 @@ export default function ReportsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap gap-3">
-          {(['deudores', 'recaudacion', 'categorias'] as const).map((tabKey) => (
-            <button
-              key={tabKey}
-              type="button"
-              onClick={() => setTab(tabKey)}
-              className={`rounded-2xl px-5 py-3 text-sm font-semibold capitalize transition ${
-                tab === tabKey
-                  ? 'bg-accent text-white'
-                  : 'bg-ink/10 text-ink/70 hover:bg-ink/20'
-              }`}
-            >
-              {tabKey === 'deudores'
-                ? 'Socios deudores'
-                : tabKey === 'recaudacion'
-                  ? 'Recaudación'
-                  : 'Por categoría'}
-            </button>
-          ))}
+          {(['financiero', 'deudores', 'recaudacion', 'categorias'] as const).map(
+            (tabKey) => (
+              <button
+                key={tabKey}
+                type="button"
+                onClick={() => setTab(tabKey)}
+                className={`rounded-2xl px-5 py-3 text-sm font-semibold capitalize transition ${
+                  tab === tabKey
+                    ? 'bg-accent text-white'
+                    : 'bg-ink/10 text-ink/70 hover:bg-ink/20'
+                }`}
+              >
+                {tabKey === 'financiero'
+                  ? 'Financiero'
+                  : tabKey === 'deudores'
+                    ? 'Socios deudores'
+                    : tabKey === 'recaudacion'
+                      ? 'Recaudación'
+                      : 'Por categoría'}
+              </button>
+            ),
+          )}
         </div>
 
         <button
@@ -701,6 +933,326 @@ export default function ReportsPage() {
         </SectionCard>
       ) : (
         <>
+          {tab === 'financiero' && (
+            <SectionCard
+              title="Reporte financiero general"
+              description="Estado financiero operativo: caja, activos por cobrar, pasivos estimados, morosidad y flujo mensual."
+            >
+              {!financial ? (
+                <div className="py-8 text-sm text-ink/60">
+                  No hay información financiera disponible.
+                </div>
+              ) : (
+                <div className="space-y-8">
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-2xl border border-ink/10 bg-accent/10 p-4">
+                      <div className="text-xs uppercase tracking-wide text-ink/50">
+                        Saldo Caja
+                      </div>
+                      <div className="mt-2 text-2xl font-bold text-accent">
+                        {fmt(financial.cashBalance)}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
+                      <div className="text-xs uppercase tracking-wide text-ink/50">
+                        Activos por cobrar
+                      </div>
+                      <div className="mt-2 text-2xl font-bold text-ink">
+                        {fmt(financial.accountsReceivable)}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-ink/10 bg-rose-50 p-4">
+                      <div className="text-xs uppercase tracking-wide text-ink/50">
+                        Pasivos estimados
+                      </div>
+                      <div className="mt-2 text-2xl font-bold text-rose-700">
+                        {fmt(financial.liabilities)}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
+                      <div className="text-xs uppercase tracking-wide text-ink/50">
+                        Cobranza efectiva
+                      </div>
+                      <div className="mt-2 text-2xl font-bold text-ink">
+                        {fmtPercent(financial.collectionEffectiveness)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-2xl border border-ink/10 bg-emerald-50 p-4">
+                      <div className="text-xs uppercase tracking-wide text-ink/50">
+                        Ingresos del mes
+                      </div>
+                      <div className="mt-2 text-2xl font-bold text-emerald-700">
+                        {fmt(financial.monthlyIncome)}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-ink/10 bg-rose-50 p-4">
+                      <div className="text-xs uppercase tracking-wide text-ink/50">
+                        Egresos del mes
+                      </div>
+                      <div className="mt-2 text-2xl font-bold text-rose-700">
+                        {fmt(financial.monthlyExpenses)}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
+                      <div className="text-xs uppercase tracking-wide text-ink/50">
+                        Resultado neto mensual
+                      </div>
+                      <div className={`mt-2 text-2xl font-bold ${signedTone(financial.monthlyNet)}`}>
+                        {fmt(financial.monthlyNet)}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
+                      <div className="text-xs uppercase tracking-wide text-ink/50">
+                        Cobertura de caja
+                      </div>
+                      <div className="mt-2 text-2xl font-bold text-ink">
+                        {financial.monthsOfCoverage === null
+                          ? '-'
+                          : `${financial.monthsOfCoverage.toFixed(1)} meses`}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
+                      <div className="text-xs uppercase tracking-wide text-ink/50">
+                        HH.·. activos
+                      </div>
+                      <div className="mt-2 text-2xl font-bold text-ink">
+                        {financial.activeMembers}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
+                      <div className="text-xs uppercase tracking-wide text-ink/50">
+                        HH.·. deudores
+                      </div>
+                      <div className="mt-2 text-2xl font-bold text-ink">
+                        {financial.debtorsCount}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
+                      <div className="text-xs uppercase tracking-wide text-ink/50">
+                        Porcentaje deudores
+                      </div>
+                      <div className="mt-2 text-2xl font-bold text-ink">
+                        {fmtPercent(financial.debtorsPercentage)}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
+                      <div className="text-xs uppercase tracking-wide text-ink/50">
+                        Deuda promedio por deudor
+                      </div>
+                      <div className="mt-2 text-2xl font-bold text-ink">
+                        {fmt(financial.averageDebtPerDebtor)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-6 xl:grid-cols-2">
+                    <div className="rounded-2xl border border-ink/10 bg-white p-4">
+                      <div className="mb-4 text-lg font-semibold text-ink">
+                        Ingresos vs egresos últimos meses
+                      </div>
+
+                      <div className="space-y-4">
+                        {financial.monthlyComparison.map((item) => (
+                          <div key={item.period}>
+                            <div className="mb-2 flex justify-between text-sm">
+                              <span className="font-semibold text-ink">{item.label}</span>
+                              <span className={signedTone(item.net)}>
+                                Neto: {fmt(item.net)}
+                              </span>
+                            </div>
+
+                            <div className="space-y-2">
+                              <div>
+                                <div className="mb-1 text-xs text-emerald-700">
+                                  Ingresos {fmt(item.income)}
+                                </div>
+                                <div className="h-2 rounded-full bg-emerald-100">
+                                  <div
+                                    className="h-2 rounded-full bg-emerald-600"
+                                    style={{
+                                      width: barWidth(item.income, maxMonthlyValue),
+                                    }}
+                                  />
+                                </div>
+                              </div>
+
+                              <div>
+                                <div className="mb-1 text-xs text-rose-700">
+                                  Egresos {fmt(item.expense)}
+                                </div>
+                                <div className="h-2 rounded-full bg-rose-100">
+                                  <div
+                                    className="h-2 rounded-full bg-rose-600"
+                                    style={{
+                                      width: barWidth(item.expense, maxMonthlyValue),
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-ink/10 bg-white p-4">
+                      <div className="mb-4 text-lg font-semibold text-ink">
+                        Antigüedad de deuda
+                      </div>
+
+                      <div className="space-y-3">
+                        {[
+                          ['1 mes', financial.debtAging.oneMonth],
+                          ['2 a 3 meses', financial.debtAging.twoToThree],
+                          ['4 a 6 meses', financial.debtAging.fourToSix],
+                          ['Más de 6 meses', financial.debtAging.overSix],
+                        ].map(([label, value]) => (
+                          <div
+                            key={label}
+                            className="flex items-center justify-between rounded-2xl bg-ink/5 px-4 py-3 text-sm"
+                          >
+                            <span className="text-ink">{label}</span>
+                            <span className="font-bold text-ink">
+                              {fmt(Number(value))}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-6 xl:grid-cols-2">
+                    <div className="rounded-2xl border border-ink/10 bg-white p-4">
+                      <div className="mb-4 text-lg font-semibold text-ink">
+                        Recaudación esperada por categoría
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full border-separate border-spacing-y-2">
+                          <thead>
+                            <tr className="text-left text-xs uppercase tracking-wide text-ink/50">
+                              <th className="px-3 py-2">Categoría</th>
+                              <th className="px-3 py-2">Activos</th>
+                              <th className="px-3 py-2">Valor</th>
+                              <th className="px-3 py-2">Esperado</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {financial.categoryExpectedCollection.map((item) => (
+                              <tr
+                                key={item.category}
+                                className="rounded-2xl bg-ink/5 text-sm"
+                              >
+                                <td className="rounded-l-2xl px-3 py-3 text-ink">
+                                  {categoryLabel(item.category)}
+                                </td>
+                                <td className="px-3 py-3 text-ink/80">
+                                  {item.activeMembers}
+                                </td>
+                                <td className="px-3 py-3 text-ink/80">
+                                  {fmt(item.unitAmount)}
+                                </td>
+                                <td className="rounded-r-2xl px-3 py-3 font-semibold text-ink">
+                                  {fmt(item.expectedTotal)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-ink/10 bg-white p-4">
+                      <div className="mb-4 text-lg font-semibold text-ink">
+                        Principales deudores
+                      </div>
+
+                      <div className="space-y-3">
+                        {financial.topDebtors.length === 0 ? (
+                          <div className="text-sm text-ink/60">
+                            No hay deudores.
+                          </div>
+                        ) : (
+                          financial.topDebtors.map((item) => (
+                            <div
+                              key={item.id}
+                              className="flex flex-col gap-2 rounded-2xl bg-ink/5 px-4 py-3 text-sm lg:flex-row lg:items-center lg:justify-between"
+                            >
+                              <div>
+                                <div className="font-semibold text-ink">
+                                  {item.fullName}
+                                </div>
+                                <div className="text-xs text-ink/60">
+                                  Matrícula {item.matricula} ·{' '}
+                                  {categoryLabel(item.category)} ·{' '}
+                                  {item.monthsOwed} meses
+                                </div>
+                              </div>
+                              <div className="font-bold text-ink">
+                                {fmt(item.totalDebt)}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-6 xl:grid-cols-2">
+                    <div className="rounded-2xl border border-ink/10 bg-white p-4">
+                      <div className="mb-4 text-lg font-semibold text-ink">
+                        Ingresos por categoría
+                      </div>
+                      <div className="space-y-3">
+                        {financial.categoryIncome.map((item) => (
+                          <div
+                            key={item.category}
+                            className="flex items-center justify-between rounded-2xl bg-ink/5 px-4 py-3 text-sm"
+                          >
+                            <span>{incomeLabel(item.category)}</span>
+                            <span className="font-bold">{fmt(item.total)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-ink/10 bg-white p-4">
+                      <div className="mb-4 text-lg font-semibold text-ink">
+                        Egresos por categoría
+                      </div>
+                      <div className="space-y-3">
+                        {financial.categoryExpense.map((item) => (
+                          <div
+                            key={item.category}
+                            className="flex items-center justify-between rounded-2xl bg-ink/5 px-4 py-3 text-sm"
+                          >
+                            <span>{expenseLabel(item.category)}</span>
+                            <span className="font-bold">{fmt(item.total)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </SectionCard>
+          )}
+
           {tab === 'deudores' && (
             <SectionCard
               title="Socios deudores"
@@ -755,7 +1307,7 @@ export default function ReportsPage() {
                           <div className="text-sm text-ink/70">
                             Categoría actual:{' '}
                             <span className="font-medium text-ink">
-                              {CATEGORY_LABELS[debtor.category] ?? debtor.category}
+                              {categoryLabel(debtor.category)}
                             </span>
                           </div>
 
@@ -796,42 +1348,6 @@ export default function ReportsPage() {
                             {debtor.monthsOwed !== 1 ? 's' : ''}
                           </div>
                         </div>
-                      </div>
-
-                      <div className="mt-4 overflow-x-auto">
-                        <table className="min-w-full border-separate border-spacing-y-2">
-                          <thead>
-                            <tr className="text-left text-xs uppercase tracking-wide text-ink/50">
-                              <th className="px-3 py-2">Mes</th>
-                              <th className="px-3 py-2">Categoría del mes</th>
-                              <th className="px-3 py-2">Situación</th>
-                              <th className="px-3 py-2">Monto actualizado</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {debtor.months.map((month) => (
-                              <tr
-                                key={`${debtor.id}-${month.periodYear}-${month.periodMonth}`}
-                                className="rounded-2xl bg-ink/5 text-sm"
-                              >
-                                <td className="rounded-l-2xl px-3 py-3 text-ink">
-                                  {month.label}
-                                </td>
-                                <td className="px-3 py-3 text-ink/80">
-                                  {CATEGORY_LABELS[month.category] ?? month.category}
-                                </td>
-                                <td className="px-3 py-3 text-ink/80">
-                                  {month.isCurrentMonth
-                                    ? 'Debe mes actual'
-                                    : 'Mes vencido impago'}
-                                </td>
-                                <td className="rounded-r-2xl px-3 py-3 font-semibold text-ink">
-                                  {fmt(month.amount)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
                       </div>
                     </div>
                   ))}
@@ -910,7 +1426,7 @@ export default function ReportsPage() {
                         className="rounded-2xl bg-ink/5 text-sm"
                       >
                         <td className="rounded-l-2xl px-3 py-3 text-ink">
-                          {CATEGORY_LABELS[category.category] ?? category.category}
+                          {categoryLabel(category.category)}
                         </td>
                         <td className="px-3 py-3 text-ink/80">
                           {category.active}
@@ -956,7 +1472,7 @@ export default function ReportsPage() {
                           className="rounded-2xl bg-ink/5 text-sm"
                         >
                           <td className="rounded-l-2xl px-3 py-3 text-ink">
-                            {CATEGORY_LABELS[row.category] ?? row.category}
+                            {categoryLabel(row.category)}
                           </td>
                           <td className="px-3 py-3 text-ink/80">
                             {row.activeMembers}
