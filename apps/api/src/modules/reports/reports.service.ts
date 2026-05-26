@@ -32,6 +32,15 @@ type MemberWithDebtData = Prisma.MemberGetPayload<{
   };
 }>;
 
+type CashHistoryItem = {
+  period: string;
+  label: string;
+  income: number;
+  expense: number;
+  net: number;
+  projected?: boolean;
+};
+
 @Injectable()
 export class ReportsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -162,7 +171,7 @@ export class ReportsService {
     const currentPeriod = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
     const currentMonthStart = new Date(Date.UTC(currentYear, currentMonth - 1, 1));
     const nextMonthStart = new Date(Date.UTC(currentYear, currentMonth, 1));
-    const sixMonthsAgoStart = new Date(Date.UTC(currentYear, currentMonth - 6, 1));
+    const twelveMonthsAgoStart = new Date(Date.UTC(currentYear, currentMonth - 11, 1));
 
     const [cashTransactions, debtors, members, monthlyCollection, rates] =
       await Promise.all([
@@ -220,30 +229,28 @@ export class ReportsService {
     const totalExpenses = this.sumCash(cashTransactions, CashDirection.OUT);
     const cashBalance = totalIncome - totalExpenses;
 
-    const lastSixMonthTransactions = cashTransactions.filter(
-      (transaction) => transaction.occurredAt >= sixMonthsAgoStart,
+    const lastTwelveMonthTransactions = cashTransactions.filter(
+      (transaction) => transaction.occurredAt >= twelveMonthsAgoStart,
     );
 
-    const monthlyCashHistory = this.buildCashHistory(lastSixMonthTransactions);
+    const historicalCashHistory = this.buildCompleteCashHistory(
+      lastTwelveMonthTransactions,
+      twelveMonthsAgoStart,
+      12,
+    );
 
-    const collectionHistory = monthlyCashHistory.map((item) => ({
+    const monthlyComparison = this.buildHistoryWithForecast(historicalCashHistory, 3);
+
+    const collectionHistory = historicalCashHistory.map((item) => ({
       period: item.period,
       label: item.label,
       total: item.income,
     }));
 
-    const expenseHistory = monthlyCashHistory.map((item) => ({
+    const expenseHistory = historicalCashHistory.map((item) => ({
       period: item.period,
       label: item.label,
       total: item.expense,
-    }));
-
-    const monthlyComparison = monthlyCashHistory.map((item) => ({
-      period: item.period,
-      label: item.label,
-      income: item.income,
-      expense: item.expense,
-      net: item.income - item.expense,
     }));
 
     const averageMonthlyCollection =
@@ -380,34 +387,40 @@ export class ReportsService {
       .reduce((sum, transaction) => sum + Number(transaction.amount), 0);
   }
 
-  private buildCashHistory(
+  private buildCompleteCashHistory(
     transactions: Array<{
       occurredAt: Date;
       direction: CashDirection;
       amount: Prisma.Decimal | number;
     }>,
-  ) {
-    const map = new Map<
-      string,
-      {
-        period: string;
-        label: string;
-        income: number;
-        expense: number;
-      }
-    >();
+    startMonth: Date,
+    monthsCount: number,
+  ): CashHistoryItem[] {
+    const map = new Map<string, CashHistoryItem>();
 
-    for (const transaction of transactions) {
-      const year = transaction.occurredAt.getUTCFullYear();
-      const month = transaction.occurredAt.getUTCMonth() + 1;
-      const period = `${year}-${String(month).padStart(2, '0')}`;
+    for (let index = 0; index < monthsCount; index += 1) {
+      const date = this.addMonths(startMonth, index);
+      const year = date.getUTCFullYear();
+      const month = date.getUTCMonth() + 1;
+      const period = this.periodKey(year, month);
 
-      const current = map.get(period) ?? {
+      map.set(period, {
         period,
         label: this.monthLabel(year, month),
         income: 0,
         expense: 0,
-      };
+        net: 0,
+        projected: false,
+      });
+    }
+
+    for (const transaction of transactions) {
+      const year = transaction.occurredAt.getUTCFullYear();
+      const month = transaction.occurredAt.getUTCMonth() + 1;
+      const period = this.periodKey(year, month);
+      const current = map.get(period);
+
+      if (!current) continue;
 
       if (transaction.direction === CashDirection.IN) {
         current.income += Number(transaction.amount);
@@ -415,12 +428,58 @@ export class ReportsService {
         current.expense += Number(transaction.amount);
       }
 
+      current.net = current.income - current.expense;
       map.set(period, current);
     }
 
     return Array.from(map.values()).sort((a, b) =>
       a.period.localeCompare(b.period),
     );
+  }
+
+  private buildHistoryWithForecast(
+    history: CashHistoryItem[],
+    forecastMonths: number,
+  ): CashHistoryItem[] {
+    if (history.length === 0) return [];
+
+    const lastRealMonth = history[history.length - 1];
+    const [lastYear, lastMonth] = lastRealMonth.period.split('-').map(Number);
+    const lastDate = new Date(Date.UTC(lastYear, lastMonth - 1, 1));
+    const forecastBase = history.slice(-3);
+
+    const averageIncome = this.average(
+      forecastBase.map((item) => Number(item.income || 0)),
+    );
+    const averageExpense = this.average(
+      forecastBase.map((item) => Number(item.expense || 0)),
+    );
+
+    const forecast: CashHistoryItem[] = [];
+
+    for (let index = 1; index <= forecastMonths; index += 1) {
+      const date = this.addMonths(lastDate, index);
+      const year = date.getUTCFullYear();
+      const month = date.getUTCMonth() + 1;
+      const income = averageIncome;
+      const expense = averageExpense;
+
+      forecast.push({
+        period: this.periodKey(year, month),
+        label: this.monthLabel(year, month),
+        income,
+        expense,
+        net: income - expense,
+        projected: true,
+      });
+    }
+
+    return [...history, ...forecast];
+  }
+
+  private average(values: number[]) {
+    if (values.length === 0) return 0;
+    return values.reduce((sum, value) => sum + value, 0) / values.length;
   }
 
   private groupCashByCategory(
@@ -577,7 +636,7 @@ export class ReportsService {
       if (amount <= 0) {
         continue;
       }
-      
+
       months.push({
         periodYear,
         periodMonth,
