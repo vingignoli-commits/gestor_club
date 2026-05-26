@@ -322,15 +322,7 @@ export class ReportsService {
     const monthsOfCoverage =
       monthlyBurnRate > 0 ? cashBalance / monthlyBurnRate : null;
 
-    const liabilities =
-      monthlyExpenses +
-      categoryExpense
-        .filter((item) =>
-          ['GRAN_LOGIA', 'CIVIL_ARMONIA', 'SERVICES', 'SALARY', 'MAINTENANCE'].includes(
-            item.category,
-          ),
-        )
-        .reduce((sum, item) => sum + item.total, 0);
+    const liabilities = monthlyExpenses;
 
     return {
       generatedAt: queryDate.toISOString(),
