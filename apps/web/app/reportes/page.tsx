@@ -13,7 +13,7 @@ type DebtorMonth = {
   category: string;
   amount: number;
   overdue: boolean;
-  isCurrentMonth: boolean;Ingresos de este mes - {financial.currentMonth}
+  isCurrentMonth: boolean;
 };
 
 type Debtor = {
@@ -291,6 +291,14 @@ export default function ReportsPage() {
       ),
       0,
     );
+  }, [financial]);
+
+  const totalIncomeByCategory = useMemo(() => {
+    return financial?.categoryIncome.reduce((sum, item) => sum + item.total, 0) ?? 0;
+  }, [financial]);
+
+  const totalExpenseByCategory = useMemo(() => {
+    return financial?.categoryExpense.reduce((sum, item) => sum + item.total, 0) ?? 0;
   }, [financial]);
 
   function reportTitle() {
@@ -639,11 +647,11 @@ export default function ReportsPage() {
 
       <section class="summary summary-4">
         <div class="box">
-          <div class="box-label">Ingresos mes</div>
+          <div class="box-label">Ingresos de este mes - ${escapeHtml(financial.currentMonth)}</div>
           <div class="box-value">${fmt(financial.monthlyIncome)}</div>
         </div>
         <div class="box">
-          <div class="box-label">Egresos mes</div>
+          <div class="box-label">Egresos de este mes - ${escapeHtml(financial.currentMonth)}</div>
           <div class="box-value">${fmt(financial.monthlyExpenses)}</div>
         </div>
         <div class="box">
@@ -969,7 +977,7 @@ export default function ReportsPage() {
                     <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
                       <div className="text-xs uppercase tracking-wide text-ink/50">
                         Activos por cobrar
-                        <InfoHint text="Dinero disponible según movimientos de caja registrados y no anulados." />
+                        <InfoHint text="Total de cuotas adeudadas con monto mayor a cero." />
                       </div>
                       <div className="mt-2 text-2xl font-bold text-ink">
                         {fmt(financial.accountsReceivable)}
@@ -989,6 +997,7 @@ export default function ReportsPage() {
                     <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
                       <div className="text-xs uppercase tracking-wide text-ink/50">
                         Cobranza efectiva
+                        <InfoHint text="Recaudación real del mes dividida por la recaudación esperada según HH.·. activos y valor vigente de cuota." />
                       </div>
                       <div className="mt-2 text-2xl font-bold text-ink">
                         {fmtPercent(financial.collectionEffectiveness)}
@@ -1000,6 +1009,7 @@ export default function ReportsPage() {
                     <div className="rounded-2xl border border-ink/10 bg-emerald-50 p-4">
                       <div className="text-xs uppercase tracking-wide text-ink/50">
                         Ingresos de este mes - {financial.currentMonth}
+                        <InfoHint text="Ingresos registrados en caja durante el mes en curso." />
                       </div>
                       <div className="mt-2 text-2xl font-bold text-emerald-700">
                         {fmt(financial.monthlyIncome)}
@@ -1009,6 +1019,7 @@ export default function ReportsPage() {
                     <div className="rounded-2xl border border-ink/10 bg-rose-50 p-4">
                       <div className="text-xs uppercase tracking-wide text-ink/50">
                         Egresos de este mes - {financial.currentMonth}
+                        <InfoHint text="Egresos registrados en caja durante el mes en curso." />
                       </div>
                       <div className="mt-2 text-2xl font-bold text-rose-700">
                         {fmt(financial.monthlyExpenses)}
@@ -1018,6 +1029,7 @@ export default function ReportsPage() {
                     <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
                       <div className="text-xs uppercase tracking-wide text-ink/50">
                         Resultado neto mensual
+                        <InfoHint text="Ingresos del mes menos egresos del mes." />
                       </div>
                       <div className={`mt-2 text-2xl font-bold ${signedTone(financial.monthlyNet)}`}>
                         {fmt(financial.monthlyNet)}
@@ -1027,6 +1039,7 @@ export default function ReportsPage() {
                     <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
                       <div className="text-xs uppercase tracking-wide text-ink/50">
                         Cobertura de caja
+                        <InfoHint text="Saldo de caja dividido por egreso promedio mensual. Indica cuántos meses podría cubrir la caja al ritmo actual." />
                       </div>
                       <div className="mt-2 text-2xl font-bold text-ink">
                         {financial.monthsOfCoverage === null
@@ -1040,6 +1053,7 @@ export default function ReportsPage() {
                     <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
                       <div className="text-xs uppercase tracking-wide text-ink/50">
                         HH.·. activos
+                        <InfoHint text="Cantidad de HH.·. con estado activo en el Cuadro del Taller." />
                       </div>
                       <div className="mt-2 text-2xl font-bold text-ink">
                         {financial.activeMembers}
@@ -1049,6 +1063,7 @@ export default function ReportsPage() {
                     <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
                       <div className="text-xs uppercase tracking-wide text-ink/50">
                         HH.·. deudores
+                        <InfoHint text="Cantidad de HH.·. activos con deuda monetaria mayor a cero." />
                       </div>
                       <div className="mt-2 text-2xl font-bold text-ink">
                         {financial.debtorsCount}
@@ -1058,6 +1073,7 @@ export default function ReportsPage() {
                     <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
                       <div className="text-xs uppercase tracking-wide text-ink/50">
                         Porcentaje deudores
+                        <InfoHint text="HH.·. deudores dividido por HH.·. activos, expresado como porcentaje." />
                       </div>
                       <div className="mt-2 text-2xl font-bold text-ink">
                         {fmtPercent(financial.debtorsPercentage)}
@@ -1067,6 +1083,7 @@ export default function ReportsPage() {
                     <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
                       <div className="text-xs uppercase tracking-wide text-ink/50">
                         Deuda promedio por deudor
+                        <InfoHint text="Total de activos por cobrar dividido por cantidad de HH.·. deudores." />
                       </div>
                       <div className="mt-2 text-2xl font-bold text-ink">
                         {fmt(financial.averageDebtPerDebtor)}
@@ -1242,6 +1259,12 @@ export default function ReportsPage() {
                             <span className="font-bold">{fmt(item.total)}</span>
                           </div>
                         ))}
+                        <div className="flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm">
+                          <span className="font-bold text-emerald-800">Total ingresos</span>
+                          <span className="font-bold text-emerald-800">
+                            {fmt(totalIncomeByCategory)}
+                          </span>
+                        </div>
                       </div>
                     </div>
 
@@ -1259,6 +1282,12 @@ export default function ReportsPage() {
                             <span className="font-bold">{fmt(item.total)}</span>
                           </div>
                         ))}
+                        <div className="flex items-center justify-between rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm">
+                          <span className="font-bold text-rose-800">Total egresos</span>
+                          <span className="font-bold text-rose-800">
+                            {fmt(totalExpenseByCategory)}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
