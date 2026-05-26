@@ -128,6 +128,7 @@ type FinancialSummary = {
     income: number;
     expense: number;
     net: number;
+    projected?: boolean;
   }>;
 
   expectedCurrentMonthCollection: number;
@@ -200,6 +201,12 @@ function incomeLabel(value: string) {
 
 function expenseLabel(value: string) {
   return EXPENSE_LABELS[value] ?? value;
+}
+
+function shortMonthLabel(value: string) {
+  const parts = value.split(' ');
+  if (parts.length < 2) return value;
+  return `${parts[0].slice(0, 3)} ${parts[1].slice(2)}`;
 }
 
 function InfoHint({ text }: { text: string }) {
@@ -589,7 +596,7 @@ export default function ReportsPage() {
       .map(
         (item) => `
           <tr>
-            <td>${escapeHtml(item.label)}</td>
+            <td>${escapeHtml(item.label)}${item.projected ? ' (estimado)' : ''}</td>
             <td class="amount">${escapeHtml(fmt(item.income))}</td>
             <td class="amount">${escapeHtml(fmt(item.expense))}</td>
             <td class="amount">${escapeHtml(fmt(item.net))}</td>
@@ -677,7 +684,7 @@ export default function ReportsPage() {
         <tbody>${expectedRows}</tbody>
       </table>
 
-      <div class="section-title">Ingresos vs egresos recientes</div>
+      <div class="section-title">Ingresos vs egresos del último año + proyección 3 meses</div>
       <table>
         <thead>
           <tr>
@@ -1093,51 +1100,113 @@ export default function ReportsPage() {
 
                   <div className="grid gap-6 xl:grid-cols-2">
                     <div className="rounded-2xl border border-ink/10 bg-white p-4">
-                      <div className="mb-4 text-lg font-semibold text-ink">
-                        Ingresos vs egresos últimos meses
+                      <div className="mb-1 text-lg font-semibold text-ink">
+                        Ingresos vs egresos del último año
+                        <InfoHint text="Compara ingresos y egresos de los últimos 12 meses, incluyendo el mes actual. Los 3 meses futuros son estimaciones calculadas con el promedio de los últimos 3 meses reales." />
+                      </div>
+                      <div className="mb-4 text-sm text-ink/60">
+                        Incluye 12 meses reales y una estimación de los próximos 3 meses.
                       </div>
 
-                      <div className="space-y-4">
-                        {financial.monthlyComparison.map((item) => (
-                          <div key={item.period}>
-                            <div className="mb-2 flex justify-between text-sm">
-                              <span className="font-semibold text-ink">{item.label}</span>
-                              <span className={signedTone(item.net)}>
-                                Neto: {fmt(item.net)}
-                              </span>
+                      <div className="overflow-x-auto">
+                        <div className="min-w-[920px]">
+                          <div className="flex h-72 items-end gap-3 rounded-2xl border border-ink/10 bg-ink/[0.02] px-4 py-5">
+                            {financial.monthlyComparison.map((item) => (
+                              <div
+                                key={item.period}
+                                className={`flex h-full min-w-12 flex-1 flex-col justify-end rounded-2xl px-1 py-2 ${
+                                  item.projected ? 'bg-amber-50/70 ring-1 ring-amber-200' : ''
+                                }`}
+                                title={`${item.label}${item.projected ? ' estimado' : ''} · Ingresos: ${fmt(item.income)} · Egresos: ${fmt(item.expense)} · Neto: ${fmt(item.net)}`}
+                              >
+                                <div className="flex flex-1 items-end justify-center gap-1">
+                                  <div
+                                    className={`w-4 rounded-t-lg ${
+                                      item.projected ? 'bg-emerald-400/60' : 'bg-emerald-600'
+                                    }`}
+                                    style={{
+                                      height: barWidth(item.income, maxMonthlyValue),
+                                      minHeight: item.income > 0 ? '6px' : '0px',
+                                    }}
+                                  />
+                                  <div
+                                    className={`w-4 rounded-t-lg ${
+                                      item.projected ? 'bg-rose-400/60' : 'bg-rose-600'
+                                    }`}
+                                    style={{
+                                      height: barWidth(item.expense, maxMonthlyValue),
+                                      minHeight: item.expense > 0 ? '6px' : '0px',
+                                    }}
+                                  />
+                                </div>
+
+                                <div className="mt-2 text-center text-[10px] font-semibold leading-tight text-ink/70">
+                                  {shortMonthLabel(item.label)}
+                                </div>
+                                {item.projected && (
+                                  <div className="mt-1 text-center text-[9px] font-semibold uppercase tracking-wide text-amber-700">
+                                    Est.
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="mt-4 grid gap-3 md:grid-cols-3">
+                            <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                              <div className="font-semibold">Ingresos</div>
+                              <div>Columnas verdes</div>
                             </div>
-
-                            <div className="space-y-2">
-                              <div>
-                                <div className="mb-1 text-xs text-emerald-700">
-                                  Ingresos {fmt(item.income)}
-                                </div>
-                                <div className="h-2 rounded-full bg-emerald-100">
-                                  <div
-                                    className="h-2 rounded-full bg-emerald-600"
-                                    style={{
-                                      width: barWidth(item.income, maxMonthlyValue),
-                                    }}
-                                  />
-                                </div>
-                              </div>
-
-                              <div>
-                                <div className="mb-1 text-xs text-rose-700">
-                                  Egresos {fmt(item.expense)}
-                                </div>
-                                <div className="h-2 rounded-full bg-rose-100">
-                                  <div
-                                    className="h-2 rounded-full bg-rose-600"
-                                    style={{
-                                      width: barWidth(item.expense, maxMonthlyValue),
-                                    }}
-                                  />
-                                </div>
-                              </div>
+                            <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                              <div className="font-semibold">Egresos</div>
+                              <div>Columnas rojas</div>
+                            </div>
+                            <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                              <div className="font-semibold">Estimación</div>
+                              <div>Próximos 3 meses</div>
                             </div>
                           </div>
-                        ))}
+                        </div>
+                      </div>
+
+                      <div className="mt-4 overflow-x-auto">
+                        <table className="min-w-full border-separate border-spacing-y-2">
+                          <thead>
+                            <tr className="text-left text-xs uppercase tracking-wide text-ink/50">
+                              <th className="px-3 py-2">Mes</th>
+                              <th className="px-3 py-2">Tipo</th>
+                              <th className="px-3 py-2">Ingresos</th>
+                              <th className="px-3 py-2">Egresos</th>
+                              <th className="px-3 py-2">Neto</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {financial.monthlyComparison.map((item) => (
+                              <tr
+                                key={`row-${item.period}`}
+                                className={`rounded-2xl text-sm ${
+                                  item.projected ? 'bg-amber-50' : 'bg-ink/5'
+                                }`}
+                              >
+                                <td className="rounded-l-2xl px-3 py-3 font-semibold text-ink">
+                                  {item.label}
+                                </td>
+                                <td className="px-3 py-3 text-ink/70">
+                                  {item.projected ? 'Estimado' : 'Real'}
+                                </td>
+                                <td className="px-3 py-3 font-semibold text-emerald-700">
+                                  {fmt(item.income)}
+                                </td>
+                                <td className="px-3 py-3 font-semibold text-rose-700">
+                                  {fmt(item.expense)}
+                                </td>
+                                <td className={`rounded-r-2xl px-3 py-3 font-bold ${signedTone(item.net)}`}>
+                                  {fmt(item.net)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
 
