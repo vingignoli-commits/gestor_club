@@ -580,12 +580,18 @@ export class ReportsService {
         continue;
       }
 
+      const amount = currentRates.get(category) ?? 0;
+
+      if (amount <= 0) {
+        continue;
+      }
+      
       months.push({
         periodYear,
         periodMonth,
         label: this.monthLabel(periodYear, periodMonth),
         category,
-        amount: currentRates.get(category) ?? 0,
+        amount,
         overdue: monthStart.getTime() < queryMonthStart.getTime(),
         isCurrentMonth,
       });
