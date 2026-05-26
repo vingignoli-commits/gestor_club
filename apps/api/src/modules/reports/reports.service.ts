@@ -113,6 +113,7 @@ export class ReportsService {
 
       return {
         month: this.monthLabel(year, month),
+        period: key,
         total,
       };
     });
@@ -158,26 +159,32 @@ export class ReportsService {
     const queryDate = new Date();
     const currentYear = queryDate.getUTCFullYear();
     const currentMonth = queryDate.getUTCMonth() + 1;
+    const currentPeriod = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
     const currentMonthStart = new Date(Date.UTC(currentYear, currentMonth - 1, 1));
     const nextMonthStart = new Date(Date.UTC(currentYear, currentMonth, 1));
     const sixMonthsAgoStart = new Date(Date.UTC(currentYear, currentMonth - 6, 1));
 
-    const [
-      cashTransactions,
-      debtors,
-      members,
-      monthlyCollection,
-    ] = await Promise.all([
-      this.prisma.cashTransaction.findMany({
-        where: {
-          status: CashTransactionStatus.REGISTERED,
-        },
-        orderBy: [{ occurredAt: 'asc' }],
-      }),
-      this.getDebtors(),
-      this.prisma.member.findMany(),
-      this.getMonthlyCollection(),
-    ]);
+    const [cashTransactions, debtors, members, monthlyCollection, rates] =
+      await Promise.all([
+        this.prisma.cashTransaction.findMany({
+          where: {
+            status: CashTransactionStatus.REGISTERED,
+          },
+          orderBy: [{ occurredAt: 'asc' }],
+        }),
+        this.getDebtors(),
+        this.prisma.member.findMany(),
+        this.getMonthlyCollection(),
+        this.prisma.monthlyRate.findMany({
+          where: {
+            validFrom: { lte: queryDate },
+            OR: [{ validTo: null }, { validTo: { gt: queryDate } }],
+          },
+          orderBy: [{ category: 'asc' }, { validFrom: 'desc' }],
+        }),
+      ]);
+
+    const currentRates = this.buildCurrentRatesMap(rates, queryDate);
 
     const activeMembers = members.filter(
       (member) => member.status === MemberStatus.ACTIVE,
@@ -267,11 +274,15 @@ export class ReportsService {
     };
 
     const categoryIncome = this.groupCashByCategory(
-      cashTransactions.filter((transaction) => transaction.direction === CashDirection.IN),
+      cashTransactions.filter(
+        (transaction) => transaction.direction === CashDirection.IN,
+      ),
     );
 
     const categoryExpense = this.groupCashByCategory(
-      cashTransactions.filter((transaction) => transaction.direction === CashDirection.OUT),
+      cashTransactions.filter(
+        (transaction) => transaction.direction === CashDirection.OUT,
+      ),
     );
 
     const topDebtors = debtors.slice(0, 10).map((debtor) => ({
@@ -288,32 +299,55 @@ export class ReportsService {
     }));
 
     const expectedCurrentMonthCollection = activeMembers.reduce((sum, member) => {
-      const rate = this.currentRateForCategory(member.category);
-      return sum + rate;
+      return sum + (currentRates.get(member.category) ?? 0);
     }, 0);
 
     const currentMonthCollection =
-      monthlyCollection.find((item) => item.month === this.monthLabel(currentYear, currentMonth))
-        ?.total ?? 0;
+      monthlyCollection.find((item) => item.period === currentPeriod)?.total ?? 0;
 
     const collectionEffectiveness =
       expectedCurrentMonthCollection > 0
         ? (currentMonthCollection / expectedCurrentMonthCollection) * 100
         : 0;
 
+    const categoryExpectedCollection = this.buildExpectedCollectionByCategory(
+      activeMembers,
+      currentRates,
+    );
+
+    const averageDebtPerDebtor =
+      debtorsCount > 0 ? accountsReceivable / debtorsCount : 0;
+
+    const monthlyBurnRate = averageExpense;
+    const monthsOfCoverage =
+      monthlyBurnRate > 0 ? cashBalance / monthlyBurnRate : null;
+
+    const liabilities =
+      monthlyExpenses +
+      categoryExpense
+        .filter((item) =>
+          ['GRAN_LOGIA', 'CIVIL_ARMONIA', 'SERVICES', 'SALARY', 'MAINTENANCE'].includes(
+            item.category,
+          ),
+        )
+        .reduce((sum, item) => sum + item.total, 0);
+
     return {
       generatedAt: queryDate.toISOString(),
       currentMonth: this.monthLabel(currentYear, currentMonth),
+      currentPeriod,
 
       cashBalance,
       monthlyIncome,
       monthlyExpenses,
       monthlyNet: monthlyIncome - monthlyExpenses,
 
+      liabilities,
       accountsReceivable,
       debtorsCount,
       debtorsPercentage:
         activeMemberCount > 0 ? (debtorsCount / activeMemberCount) * 100 : 0,
+      averageDebtPerDebtor,
 
       activeMembers: activeMemberCount,
       inactiveMembers: inactiveMembers.length,
@@ -321,6 +355,8 @@ export class ReportsService {
 
       averageMonthlyCollection,
       averageExpense,
+      monthlyBurnRate,
+      monthsOfCoverage,
 
       collectionHistory,
       expenseHistory,
@@ -329,6 +365,7 @@ export class ReportsService {
 
       categoryIncome,
       categoryExpense,
+      categoryExpectedCollection,
 
       topDebtors,
       monthlyComparison,
@@ -421,8 +458,43 @@ export class ReportsService {
       .sort((a, b) => b.total - a.total);
   }
 
-  private currentRateForCategory(_category: MemberCategory) {
-    return 0;
+  private buildExpectedCollectionByCategory(
+    members: Array<{
+      category: MemberCategory;
+      status: MemberStatus;
+    }>,
+    currentRates: Map<MemberCategory, number>,
+  ) {
+    const map = new Map<
+      MemberCategory,
+      {
+        category: MemberCategory;
+        activeMembers: number;
+        unitAmount: number;
+        expectedTotal: number;
+      }
+    >();
+
+    for (const member of members) {
+      const unitAmount = currentRates.get(member.category) ?? 0;
+
+      const current = map.get(member.category) ?? {
+        category: member.category,
+        activeMembers: 0,
+        unitAmount,
+        expectedTotal: 0,
+      };
+
+      current.activeMembers += 1;
+      current.unitAmount = unitAmount;
+      current.expectedTotal += unitAmount;
+
+      map.set(member.category, current);
+    }
+
+    return Array.from(map.values()).sort((a, b) =>
+      String(a.category).localeCompare(String(b.category)),
+    );
   }
 
   private buildCurrentRatesMap(
