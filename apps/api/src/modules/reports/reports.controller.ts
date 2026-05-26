@@ -15,13 +15,13 @@ export class ReportsController {
     return this.reportsService.getMonthlyCollection();
   }
 
-  @Get('cash-summary')
-  getCashSummary() {
-    return this.reportsService.getCashSummary();
-  }
-
   @Get('members-by-category')
   getMembersByCategory() {
     return this.reportsService.getMembersByCategory();
+  }
+
+  @Get('financial-summary')
+  getFinancialSummary() {
+    return this.reportsService.getFinancialSummary();
   }
 }
