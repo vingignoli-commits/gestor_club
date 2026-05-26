@@ -202,6 +202,17 @@ function expenseLabel(value: string) {
   return EXPENSE_LABELS[value] ?? value;
 }
 
+function InfoHint({ text }: { text: string }) {
+  return (
+    <span
+      title={text}
+      className="ml-2 inline-flex h-5 w-5 cursor-help items-center justify-center rounded-full border border-ink/20 text-xs font-bold text-ink/50"
+    >
+      ?
+    </span>
+  );
+}
+
 function signedTone(value: number) {
   if (value > 0) return 'text-emerald-700';
   if (value < 0) return 'text-rose-700';
