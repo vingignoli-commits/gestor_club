@@ -331,6 +331,120 @@ export class ReportsService {
 
     const liabilities = monthlyExpenses;
 
+    const currentMonthMembershipIncome = currentMonthTransactions
+      .filter(
+        (transaction) =>
+          transaction.direction === CashDirection.IN &&
+          transaction.incomeType === 'MEMBERSHIP',
+      )
+      .reduce((sum, transaction) => sum + Number(transaction.amount), 0);
+
+    const feeDependencyPercentage =
+      monthlyIncome > 0 ? (currentMonthMembershipIncome / monthlyIncome) * 100 : 0;
+
+    const activeWithoutPhone = activeMembers.filter(
+      (member) => !member.phone || member.phone.trim() === '',
+    ).length;
+
+    const activeWithoutEmail = activeMembers.filter(
+      (member) => !member.email || member.email.trim() === '',
+    ).length;
+
+    const phoneCoveragePercentage =
+      activeMemberCount > 0
+        ? ((activeMemberCount - activeWithoutPhone) / activeMemberCount) * 100
+        : 0;
+
+    const emailCoveragePercentage =
+      activeMemberCount > 0
+        ? ((activeMemberCount - activeWithoutEmail) / activeMemberCount) * 100
+        : 0;
+
+    const topFiveDebt = debtors
+      .slice(0, 5)
+      .reduce((sum, debtor) => sum + Number(debtor.debt), 0);
+
+    const debtConcentrationTopFivePercentage =
+      accountsReceivable > 0 ? (topFiveDebt / accountsReceivable) * 100 : 0;
+
+    const recentRealMonths = historicalCashHistory.slice(-3);
+    const previousRealMonths = historicalCashHistory.slice(-6, -3);
+    const recentNet = recentRealMonths.reduce((sum, item) => sum + item.net, 0);
+    const previousNet = previousRealMonths.reduce((sum, item) => sum + item.net, 0);
+    const netTrend = recentNet - previousNet;
+
+    const collectionScore = Math.min(100, Math.max(0, collectionEffectiveness));
+    const debtorScore = Math.min(
+      100,
+      Math.max(0, 100 - (activeMemberCount > 0 ? (debtorsCount / activeMemberCount) * 100 : 0)),
+    );
+    const coverageScore = Math.min(
+      100,
+      Math.max(0, monthsOfCoverage === null ? 100 : monthsOfCoverage * 25),
+    );
+    const contactScore = Math.min(100, Math.max(0, phoneCoveragePercentage));
+
+    const financialHealthScore = Math.round(
+      collectionScore * 0.35 + debtorScore * 0.25 + coverageScore * 0.25 + contactScore * 0.15,
+    );
+
+    const liquidityRisk =
+      monthsOfCoverage === null || monthsOfCoverage >= 3
+        ? 'LOW'
+        : monthsOfCoverage >= 1.5
+          ? 'MEDIUM'
+          : 'HIGH';
+
+    const collectionRisk =
+      collectionEffectiveness >= 85
+        ? 'LOW'
+        : collectionEffectiveness >= 60
+          ? 'MEDIUM'
+          : 'HIGH';
+
+    const debtRisk =
+      activeMemberCount === 0 || debtorsCount / activeMemberCount <= 0.15
+        ? 'LOW'
+        : debtorsCount / activeMemberCount <= 0.35
+          ? 'MEDIUM'
+          : 'HIGH';
+
+    const strategicAlerts = [
+      ...(collectionRisk === 'HIGH'
+        ? ['La cobranza efectiva del mes está por debajo del umbral sano.']
+        : []),
+      ...(liquidityRisk === 'HIGH'
+        ? ['La cobertura de caja es baja frente al egreso promedio mensual.']
+        : []),
+      ...(debtRisk === 'HIGH'
+        ? ['El porcentaje de HH.·. deudores es alto para una gestión estable.']
+        : []),
+      ...(debtConcentrationTopFivePercentage >= 50
+        ? ['La deuda está concentrada en pocos HH.·.; conviene priorizar gestión individual.']
+        : []),
+      ...(phoneCoveragePercentage < 90
+        ? ['La cobertura telefónica de HH.·. activos es insuficiente para gestión rápida.']
+        : []),
+    ];
+
+    const strategicRecommendations = [
+      ...(collectionEffectiveness < 85
+        ? ['Priorizar campaña de cobranza sobre HH.·. con deuda real mayor a cero.']
+        : []),
+      ...(monthsOfCoverage !== null && monthsOfCoverage < 3
+        ? ['Reducir egresos no esenciales o reforzar recaudación para ampliar cobertura de caja.']
+        : []),
+      ...(debtConcentrationTopFivePercentage >= 40
+        ? ['Gestionar personalmente los principales deudores antes de campañas masivas.']
+        : []),
+      ...(activeWithoutPhone > 0
+        ? ['Completar teléfonos de HH.·. activos para mejorar alcance de tesorería.']
+        : []),
+      ...(netTrend < 0
+        ? ['Revisar tendencia de flujo: los últimos 3 meses empeoraron contra los 3 anteriores.']
+        : []),
+    ];
+
     return {
       generatedAt: queryDate.toISOString(),
       currentMonth: this.monthLabel(currentYear, currentMonth),
@@ -372,6 +486,25 @@ export class ReportsService {
       expectedCurrentMonthCollection,
       currentMonthCollection,
       collectionEffectiveness,
+
+      strategic: {
+        financialHealthScore,
+        liquidityRisk,
+        collectionRisk,
+        debtRisk,
+        feeDependencyPercentage,
+        currentMonthMembershipIncome,
+        debtConcentrationTopFivePercentage,
+        phoneCoveragePercentage,
+        emailCoveragePercentage,
+        activeWithoutPhone,
+        activeWithoutEmail,
+        netTrend,
+        recentNet,
+        previousNet,
+        strategicAlerts,
+        strategicRecommendations,
+      },
     };
   }
 
