@@ -25,4 +25,29 @@ export class AuthController {
   me(@Headers('authorization') authorization?: string) {
     return this.authService.me(authorization);
   }
+
+  @Post('recover-admin')
+  recoverAdmin(
+    @Body()
+    dto: {
+      email: string;
+      fullName?: string;
+      newPassword: string;
+      recoveryKey: string;
+    },
+  ) {
+    return this.authService.recoverAdmin(dto);
+  }
+
+  @Post('users/socio')
+  createSocioUser(
+    @Body()
+    dto: {
+      email: string;
+      fullName: string;
+      password: string;
+    },
+  ) {
+    return this.authService.createSocioUser(dto);
+  }
 }
