@@ -1,38 +1,55 @@
 'use client';
 
 import {
-  ReactNode,
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
   useState,
+  ReactNode,
 } from 'react';
 import { api } from '../lib/api';
 
-export type AuthRole = 'ADMIN' | 'GENERAL';
+type UserRole = 'ADMIN' | 'SOCIO';
 
 type User = {
   id: string;
   email: string;
   fullName: string;
-  role: AuthRole;
-  roles: string[];
+  role: UserRole;
+  isActive: boolean;
   permissions: string[];
 };
 
 type AuthCtx = {
   user: User | null;
   loading: boolean;
+  canEdit: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
-  canAccess: (path: string) => boolean;
-  canEdit: boolean;
+  canAccess: (pathname: string) => boolean;
 };
 
 const AuthContext = createContext<AuthCtx | null>(null);
 
-const GENERAL_ALLOWED_PATHS = ['/', '/socios', '/caja', '/reportes'];
+const ADMIN_PATHS = [
+  '/',
+  '/socios',
+  '/tesoreria',
+  '/caja',
+  '/reportes',
+  '/mensajeria',
+  '/auditoria',
+  '/configuracion',
+];
+
+const SOCIO_PATHS = ['/', '/socios'];
+
+function normalizePath(pathname: string) {
+  if (pathname === '/') return '/';
+  return `/${pathname.split('/').filter(Boolean)[0] ?? ''}`;
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -57,10 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function login(email: string, password: string) {
-    const res = await api.post<{
-      accessToken: string;
-      user: User;
-    }>('/auth/login', {
+    const res = await api.post<{ accessToken: string; user: User }>('/auth/login', {
       email,
       password,
     });
@@ -74,22 +88,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }
 
-  function canAccess(path: string) {
-    if (!user) return false;
-    if (user.role === 'ADMIN') return true;
-    return GENERAL_ALLOWED_PATHS.includes(path);
-  }
+  const canAccess = useCallback(
+    (pathname: string) => {
+      if (!user) return false;
+
+      const base = normalizePath(pathname);
+
+      if (user.role === 'ADMIN') return ADMIN_PATHS.includes(base);
+      if (user.role === 'SOCIO') return SOCIO_PATHS.includes(base);
+
+      return false;
+    },
+    [user],
+  );
 
   const value = useMemo<AuthCtx>(
     () => ({
       user,
       loading,
+      canEdit: user?.role === 'ADMIN',
       login,
       logout,
       canAccess,
-      canEdit: user?.role === 'ADMIN',
     }),
-    [user, loading],
+    [user, loading, canAccess],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
