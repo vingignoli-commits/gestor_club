@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { SectionCard } from '../../components/section-card';
 import { api } from '../../lib/api';
 
-type Tab = 'financiero' | 'deudores' | 'recaudacion' | 'categorias';
+type Tab = 'estrategico' | 'financiero' | 'deudores' | 'recaudacion' | 'categorias';
 
 type DebtorMonth = {
   periodYear: number;
@@ -134,6 +134,25 @@ type FinancialSummary = {
   expectedCurrentMonthCollection: number;
   currentMonthCollection: number;
   collectionEffectiveness: number;
+
+  strategic: {
+    financialHealthScore: number;
+    liquidityRisk: 'LOW' | 'MEDIUM' | 'HIGH';
+    collectionRisk: 'LOW' | 'MEDIUM' | 'HIGH';
+    debtRisk: 'LOW' | 'MEDIUM' | 'HIGH';
+    feeDependencyPercentage: number;
+    currentMonthMembershipIncome: number;
+    debtConcentrationTopFivePercentage: number;
+    phoneCoveragePercentage: number;
+    emailCoveragePercentage: number;
+    activeWithoutPhone: number;
+    activeWithoutEmail: number;
+    netTrend: number;
+    recentNet: number;
+    previousNet: number;
+    strategicAlerts: string[];
+    strategicRecommendations: string[];
+  };
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -231,6 +250,24 @@ function barWidth(value: number, max: number) {
   return `${Math.min(100, Math.max(0, (value / max) * 100))}%`;
 }
 
+function riskLabel(value: 'LOW' | 'MEDIUM' | 'HIGH') {
+  if (value === 'LOW') return 'Bajo';
+  if (value === 'MEDIUM') return 'Medio';
+  return 'Alto';
+}
+
+function riskClass(value: 'LOW' | 'MEDIUM' | 'HIGH') {
+  if (value === 'LOW') return 'border-emerald-200 bg-emerald-50 text-emerald-800';
+  if (value === 'MEDIUM') return 'border-amber-200 bg-amber-50 text-amber-800';
+  return 'border-rose-200 bg-rose-50 text-rose-800';
+}
+
+function healthClass(score: number) {
+  if (score >= 75) return 'text-emerald-700';
+  if (score >= 50) return 'text-amber-700';
+  return 'text-rose-700';
+}
+
 export default function ReportsPage() {
   const [tab, setTab] = useState<Tab>('financiero');
   const [debtors, setDebtors] = useState<Debtor[]>([]);
@@ -309,6 +346,7 @@ export default function ReportsPage() {
   }, [financial]);
 
   function reportTitle() {
+    if (tab === 'estrategico') return 'Reporte estratégico del club';
     if (tab === 'financiero') return 'Reporte financiero general';
     if (tab === 'deudores') return 'Reporte de socios deudores';
     if (tab === 'recaudacion') return 'Reporte de recaudación mensual';
@@ -316,6 +354,14 @@ export default function ReportsPage() {
   }
 
   function reportCriteria() {
+    if (tab === 'estrategico') {
+      return [
+        'Fuente: caja, pagos, padrón, deuda, contactos y flujo mensual.',
+        'Criterio: indicadores públicos de gestión y alertas operativas para decisión estratégica.',
+        'Incluye: salud financiera, riesgo de liquidez, riesgo de cobranza, dependencia de cuotas, concentración de deuda y cobertura de contacto.',
+      ];
+    }
+
     if (tab === 'financiero') {
       return [
         'Fuente: caja, pagos, cuotas vigentes, padrón activo e historial de deuda.',
@@ -587,6 +633,81 @@ export default function ReportsPage() {
     `;
   }
 
+  function buildStrategicPdfHtml() {
+    if (!financial) {
+      return buildPdfShell('<p>No hay información estratégica disponible.</p>');
+    }
+
+    const alerts = financial.strategic.strategicAlerts.length > 0
+      ? financial.strategic.strategicAlerts.map((item) => `<li>${escapeHtml(item)}</li>`).join('')
+      : '<li>No hay alertas críticas registradas al momento de emisión.</li>';
+
+    const recommendations = financial.strategic.strategicRecommendations.length > 0
+      ? financial.strategic.strategicRecommendations.map((item) => `<li>${escapeHtml(item)}</li>`).join('')
+      : '<li>Mantener seguimiento mensual de caja, cobranza y padrón activo.</li>';
+
+    return buildPdfShell(`
+      <section class="summary summary-4">
+        <div class="box">
+          <div class="box-label">Salud financiera</div>
+          <div class="box-value">${financial.strategic.financialHealthScore}/100</div>
+        </div>
+        <div class="box">
+          <div class="box-label">Riesgo liquidez</div>
+          <div class="box-value">${riskLabel(financial.strategic.liquidityRisk)}</div>
+        </div>
+        <div class="box">
+          <div class="box-label">Riesgo cobranza</div>
+          <div class="box-value">${riskLabel(financial.strategic.collectionRisk)}</div>
+        </div>
+        <div class="box">
+          <div class="box-label">Riesgo deuda</div>
+          <div class="box-value">${riskLabel(financial.strategic.debtRisk)}</div>
+        </div>
+      </section>
+
+      <section class="summary summary-4">
+        <div class="box">
+          <div class="box-label">Dependencia de cuotas</div>
+          <div class="box-value">${fmtPercent(financial.strategic.feeDependencyPercentage)}</div>
+        </div>
+        <div class="box">
+          <div class="box-label">Concentración deuda top 5</div>
+          <div class="box-value">${fmtPercent(financial.strategic.debtConcentrationTopFivePercentage)}</div>
+        </div>
+        <div class="box">
+          <div class="box-label">Cobertura teléfono</div>
+          <div class="box-value">${fmtPercent(financial.strategic.phoneCoveragePercentage)}</div>
+        </div>
+        <div class="box">
+          <div class="box-label">Cobertura email</div>
+          <div class="box-value">${fmtPercent(financial.strategic.emailCoveragePercentage)}</div>
+        </div>
+      </section>
+
+      <div class="section-title">Indicadores públicos de gestión</div>
+      <table>
+        <thead>
+          <tr><th>Indicador</th><th>Valor</th><th>Interpretación</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>HH.·. activos</td><td class="amount">${financial.activeMembers}</td><td>Base real para cobranza y comunicación.</td></tr>
+          <tr><td>HH.·. deudores</td><td class="amount">${financial.debtorsCount}</td><td>Solo deuda monetaria mayor a cero.</td></tr>
+          <tr><td>Activos por cobrar</td><td class="amount">${fmt(financial.accountsReceivable)}</td><td>Capital pendiente de cobro.</td></tr>
+          <tr><td>Meses de cobertura de caja</td><td class="amount">${financial.monthsOfCoverage === null ? '-' : `${financial.monthsOfCoverage.toFixed(1)} meses`}</td><td>Resistencia operativa frente al gasto promedio.</td></tr>
+          <tr><td>HH.·. activos sin teléfono</td><td class="amount">${financial.strategic.activeWithoutPhone}</td><td>Reduce velocidad de gestión de tesorería.</td></tr>
+          <tr><td>HH.·. activos sin email</td><td class="amount">${financial.strategic.activeWithoutEmail}</td><td>Reduce trazabilidad formal de comunicaciones.</td></tr>
+        </tbody>
+      </table>
+
+      <div class="section-title">Alertas</div>
+      <section class="criteria"><ul>${alerts}</ul></section>
+
+      <div class="section-title">Recomendaciones</div>
+      <section class="criteria"><ul>${recommendations}</ul></section>
+    `);
+  }
+
   function buildFinancialPdfHtml() {
     if (!financial) {
       return buildPdfShell('<p>No hay información financiera disponible.</p>');
@@ -730,6 +851,10 @@ export default function ReportsPage() {
   }
 
   function buildPdfHtml() {
+    if (tab === 'estrategico') {
+      return buildStrategicPdfHtml();
+    }
+
     if (tab === 'financiero') {
       return buildFinancialPdfHtml();
     }
@@ -919,7 +1044,7 @@ export default function ReportsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap gap-3">
-          {(['financiero', 'deudores', 'recaudacion', 'categorias'] as const).map(
+          {(['estrategico', 'financiero', 'deudores', 'recaudacion', 'categorias'] as const).map(
             (tabKey) => (
               <button
                 key={tabKey}
@@ -931,9 +1056,11 @@ export default function ReportsPage() {
                     : 'bg-ink/10 text-ink/70 hover:bg-ink/20'
                 }`}
               >
-                {tabKey === 'financiero'
-                  ? 'Financiero'
-                  : tabKey === 'deudores'
+                {tabKey === 'estrategico'
+                  ? 'Estratégico'
+                  : tabKey === 'financiero'
+                    ? 'Financiero'
+                    : tabKey === 'deudores'
                     ? 'Socios deudores'
                     : tabKey === 'recaudacion'
                       ? 'Recaudación'
@@ -959,6 +1086,201 @@ export default function ReportsPage() {
         </SectionCard>
       ) : (
         <>
+          {tab === 'estrategico' && (
+            <SectionCard
+              title="Reporte estratégico del club"
+              description="Indicadores públicos para gestión institucional, decisiones estratégicas y control operativo."
+            >
+              {!financial ? (
+                <div className="py-8 text-sm text-ink/60">
+                  No hay información estratégica disponible.
+                </div>
+              ) : (
+                <div className="space-y-8">
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
+                      <div className="text-xs uppercase tracking-wide text-ink/50">
+                        Salud financiera
+                        <InfoHint text="Índice compuesto: cobranza efectiva, baja morosidad, cobertura de caja y cobertura telefónica." />
+                      </div>
+                      <div className={`mt-2 text-3xl font-bold ${healthClass(financial.strategic.financialHealthScore)}`}>
+                        {financial.strategic.financialHealthScore}/100
+                      </div>
+                    </div>
+
+                    <div className={`rounded-2xl border p-4 ${riskClass(financial.strategic.liquidityRisk)}`}>
+                      <div className="text-xs uppercase tracking-wide opacity-70">
+                        Riesgo de liquidez
+                        <InfoHint text="Evalúa meses de cobertura de caja contra el egreso promedio mensual." />
+                      </div>
+                      <div className="mt-2 text-2xl font-bold">
+                        {riskLabel(financial.strategic.liquidityRisk)}
+                      </div>
+                    </div>
+
+                    <div className={`rounded-2xl border p-4 ${riskClass(financial.strategic.collectionRisk)}`}>
+                      <div className="text-xs uppercase tracking-wide opacity-70">
+                        Riesgo de cobranza
+                        <InfoHint text="Evalúa la recaudación real del mes frente a la recaudación esperada." />
+                      </div>
+                      <div className="mt-2 text-2xl font-bold">
+                        {riskLabel(financial.strategic.collectionRisk)}
+                      </div>
+                    </div>
+
+                    <div className={`rounded-2xl border p-4 ${riskClass(financial.strategic.debtRisk)}`}>
+                      <div className="text-xs uppercase tracking-wide opacity-70">
+                        Riesgo de deuda
+                        <InfoHint text="Evalúa el porcentaje de HH.·. activos con deuda monetaria real mayor a cero." />
+                      </div>
+                      <div className="mt-2 text-2xl font-bold">
+                        {riskLabel(financial.strategic.debtRisk)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-2xl border border-ink/10 bg-white p-4">
+                      <div className="text-xs uppercase tracking-wide text-ink/50">
+                        Dependencia de cuotas
+                        <InfoHint text="Porcentaje de los ingresos del mes que proviene de cuotas." />
+                      </div>
+                      <div className="mt-2 text-2xl font-bold text-ink">
+                        {fmtPercent(financial.strategic.feeDependencyPercentage)}
+                      </div>
+                      <div className="mt-1 text-xs text-ink/50">
+                        Cuotas: {fmt(financial.strategic.currentMonthMembershipIncome)}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-ink/10 bg-white p-4">
+                      <div className="text-xs uppercase tracking-wide text-ink/50">
+                        Concentración de deuda Top 5
+                        <InfoHint text="Porcentaje de la deuda total acumulada concentrada en los 5 principales deudores." />
+                      </div>
+                      <div className="mt-2 text-2xl font-bold text-ink">
+                        {fmtPercent(financial.strategic.debtConcentrationTopFivePercentage)}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-ink/10 bg-white p-4">
+                      <div className="text-xs uppercase tracking-wide text-ink/50">
+                        Cobertura telefónica
+                        <InfoHint text="Porcentaje de HH.·. activos con teléfono registrado." />
+                      </div>
+                      <div className="mt-2 text-2xl font-bold text-ink">
+                        {fmtPercent(financial.strategic.phoneCoveragePercentage)}
+                      </div>
+                      <div className="mt-1 text-xs text-ink/50">
+                        Sin teléfono: {financial.strategic.activeWithoutPhone}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-ink/10 bg-white p-4">
+                      <div className="text-xs uppercase tracking-wide text-ink/50">
+                        Cobertura email
+                        <InfoHint text="Porcentaje de HH.·. activos con email registrado." />
+                      </div>
+                      <div className="mt-2 text-2xl font-bold text-ink">
+                        {fmtPercent(financial.strategic.emailCoveragePercentage)}
+                      </div>
+                      <div className="mt-1 text-xs text-ink/50">
+                        Sin email: {financial.strategic.activeWithoutEmail}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-6 xl:grid-cols-2">
+                    <div className="rounded-2xl border border-ink/10 bg-white p-4">
+                      <div className="mb-4 text-lg font-semibold text-ink">
+                        Información pública de gestión
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between rounded-2xl bg-ink/5 px-4 py-3 text-sm">
+                          <span>HH.·. activos</span>
+                          <span className="font-bold">{financial.activeMembers}</span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-2xl bg-ink/5 px-4 py-3 text-sm">
+                          <span>HH.·. inactivos</span>
+                          <span className="font-bold">{financial.inactiveMembers}</span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-2xl bg-ink/5 px-4 py-3 text-sm">
+                          <span>HH.·. con deuda real</span>
+                          <span className="font-bold">{financial.debtorsCount}</span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-2xl bg-ink/5 px-4 py-3 text-sm">
+                          <span>Activos por cobrar</span>
+                          <span className="font-bold">{fmt(financial.accountsReceivable)}</span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-2xl bg-ink/5 px-4 py-3 text-sm">
+                          <span>Cobertura de caja</span>
+                          <span className="font-bold">
+                            {financial.monthsOfCoverage === null ? '-' : `${financial.monthsOfCoverage.toFixed(1)} meses`}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-2xl bg-ink/5 px-4 py-3 text-sm">
+                          <span>Tendencia neta últimos 3 meses vs 3 anteriores</span>
+                          <span className={`font-bold ${signedTone(financial.strategic.netTrend)}`}>
+                            {fmt(financial.strategic.netTrend)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-ink/10 bg-white p-4">
+                      <div className="mb-4 text-lg font-semibold text-ink">
+                        Alertas y recomendaciones
+                      </div>
+
+                      <div className="space-y-5">
+                        <div>
+                          <div className="mb-2 text-sm font-semibold text-ink">Alertas</div>
+                          <div className="space-y-2">
+                            {financial.strategic.strategicAlerts.length === 0 ? (
+                              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                                No hay alertas críticas al momento.
+                              </div>
+                            ) : (
+                              financial.strategic.strategicAlerts.map((item) => (
+                                <div
+                                  key={item}
+                                  className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+                                >
+                                  {item}
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="mb-2 text-sm font-semibold text-ink">Recomendaciones</div>
+                          <div className="space-y-2">
+                            {financial.strategic.strategicRecommendations.length === 0 ? (
+                              <div className="rounded-2xl border border-ink/10 bg-ink/5 px-4 py-3 text-sm text-ink/70">
+                                Mantener seguimiento mensual de caja, cobranza y padrón activo.
+                              </div>
+                            ) : (
+                              financial.strategic.strategicRecommendations.map((item) => (
+                                <div
+                                  key={item}
+                                  className="rounded-2xl border border-ink/10 bg-ink/5 px-4 py-3 text-sm text-ink"
+                                >
+                                  {item}
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </SectionCard>
+          )}
+
           {tab === 'financiero' && (
             <SectionCard
               title="Reporte financiero general"
