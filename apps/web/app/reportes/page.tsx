@@ -152,6 +152,14 @@ type FinancialSummary = {
     previousNet: number;
     strategicAlerts: string[];
     strategicRecommendations: string[];
+    strategicActionPlan: Array<{
+      priority: 'ALTA' | 'MEDIA' | 'BAJA';
+      area: string;
+      action: string;
+      impact: string;
+      urgency: string;
+      metric: string;
+    }>;
   };
 };
 
@@ -266,6 +274,12 @@ function healthClass(score: number) {
   if (score >= 75) return 'text-emerald-700';
   if (score >= 50) return 'text-amber-700';
   return 'text-rose-700';
+}
+
+function priorityClass(priority: 'ALTA' | 'MEDIA' | 'BAJA') {
+  if (priority === 'ALTA') return 'border-rose-200 bg-rose-50 text-rose-800';
+  if (priority === 'MEDIA') return 'border-amber-200 bg-amber-50 text-amber-800';
+  return 'border-emerald-200 bg-emerald-50 text-emerald-800';
 }
 
 export default function ReportsPage() {
@@ -646,6 +660,20 @@ export default function ReportsPage() {
       ? financial.strategic.strategicRecommendations.map((item) => `<li>${escapeHtml(item)}</li>`).join('')
       : '<li>Mantener seguimiento mensual de caja, cobranza y padrón activo.</li>';
 
+    const actionPlanRows = financial.strategic.strategicActionPlan
+      .map(
+        (item) => `
+          <tr>
+            <td>${escapeHtml(item.priority)}</td>
+            <td>${escapeHtml(item.area)}</td>
+            <td>${escapeHtml(item.action)}</td>
+            <td>${escapeHtml(item.urgency)}</td>
+            <td>${escapeHtml(item.metric)}</td>
+          </tr>
+        `,
+      )
+      .join('');
+
     return buildPdfShell(`
       <section class="summary summary-4">
         <div class="box">
@@ -705,6 +733,20 @@ export default function ReportsPage() {
 
       <div class="section-title">Recomendaciones</div>
       <section class="criteria"><ul>${recommendations}</ul></section>
+
+      <div class="section-title">Plan de acción priorizado</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Prioridad</th>
+            <th>Área</th>
+            <th>Acción</th>
+            <th>Urgencia</th>
+            <th>Métrica</th>
+          </tr>
+        </thead>
+        <tbody>${actionPlanRows}</tbody>
+      </table>
     `);
   }
 
@@ -1274,6 +1316,49 @@ export default function ReportsPage() {
                           </div>
                         </div>
                       </div>
+
+
+                  <div className="rounded-2xl border border-ink/10 bg-white p-4">
+                    <div className="mb-4 flex flex-col gap-1">
+                      <div className="text-lg font-semibold text-ink">
+                        Plan de acción priorizado
+                      </div>
+                      <p className="text-sm text-ink/60">
+                        Acciones sugeridas por el sistema según liquidez, cobranza, concentración de deuda, contactos y tendencia del flujo.
+                      </p>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full border-separate border-spacing-y-2">
+                        <thead>
+                          <tr className="text-left text-xs uppercase tracking-wide text-ink/50">
+                            <th className="px-3 py-2">Prioridad</th>
+                            <th className="px-3 py-2">Área</th>
+                            <th className="px-3 py-2">Acción</th>
+                            <th className="px-3 py-2">Impacto</th>
+                            <th className="px-3 py-2">Urgencia</th>
+                            <th className="px-3 py-2">Métrica</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {financial.strategic.strategicActionPlan.map((item, index) => (
+                            <tr key={`${item.area}-${index}`} className="rounded-2xl bg-ink/5 text-sm">
+                              <td className="rounded-l-2xl px-3 py-3">
+                                <span className={`rounded-xl border px-2 py-1 text-xs font-semibold ${priorityClass(item.priority)}`}>
+                                  {item.priority}
+                                </span>
+                              </td>
+                              <td className="px-3 py-3 font-semibold text-ink">{item.area}</td>
+                              <td className="px-3 py-3 text-ink/80">{item.action}</td>
+                              <td className="px-3 py-3 text-ink/80">{item.impact}</td>
+                              <td className="px-3 py-3 text-ink/80">{item.urgency}</td>
+                              <td className="rounded-r-2xl px-3 py-3 text-ink/70">{item.metric}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                     </div>
                   </div>
                 </div>
@@ -1680,6 +1765,49 @@ export default function ReportsPage() {
                           </span>
                         </div>
                       </div>
+
+
+                  <div className="rounded-2xl border border-ink/10 bg-white p-4">
+                    <div className="mb-4 flex flex-col gap-1">
+                      <div className="text-lg font-semibold text-ink">
+                        Plan de acción priorizado
+                      </div>
+                      <p className="text-sm text-ink/60">
+                        Acciones sugeridas por el sistema según liquidez, cobranza, concentración de deuda, contactos y tendencia del flujo.
+                      </p>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full border-separate border-spacing-y-2">
+                        <thead>
+                          <tr className="text-left text-xs uppercase tracking-wide text-ink/50">
+                            <th className="px-3 py-2">Prioridad</th>
+                            <th className="px-3 py-2">Área</th>
+                            <th className="px-3 py-2">Acción</th>
+                            <th className="px-3 py-2">Impacto</th>
+                            <th className="px-3 py-2">Urgencia</th>
+                            <th className="px-3 py-2">Métrica</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {financial.strategic.strategicActionPlan.map((item, index) => (
+                            <tr key={`${item.area}-${index}`} className="rounded-2xl bg-ink/5 text-sm">
+                              <td className="rounded-l-2xl px-3 py-3">
+                                <span className={`rounded-xl border px-2 py-1 text-xs font-semibold ${priorityClass(item.priority)}`}>
+                                  {item.priority}
+                                </span>
+                              </td>
+                              <td className="px-3 py-3 font-semibold text-ink">{item.area}</td>
+                              <td className="px-3 py-3 text-ink/80">{item.action}</td>
+                              <td className="px-3 py-3 text-ink/80">{item.impact}</td>
+                              <td className="px-3 py-3 text-ink/80">{item.urgency}</td>
+                              <td className="rounded-r-2xl px-3 py-3 text-ink/70">{item.metric}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                     </div>
                   </div>
                 </div>
