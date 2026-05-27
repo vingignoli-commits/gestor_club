@@ -7,6 +7,21 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  fullName     String
+  role         UserRole
+  passwordHash String
+  passwordSalt String
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([role, isActive])
+}
+
 model Member {
   id              String                  @id @default(cuid())
   matricula       String                  @unique
@@ -101,19 +116,19 @@ model Charge {
 }
 
 model Payment {
-  id          String              @id @default(cuid())
+  id          String        @id @default(cuid())
   memberId    String
   paidAt      DateTime
   periodYear  Int
   periodMonth Int
-  amount      Decimal             @db.Decimal(12, 2)
+  amount      Decimal       @db.Decimal(12, 2)
   methodCode  String
-  status      PaymentStatus       @default(REGISTERED)
+  status      PaymentStatus @default(REGISTERED)
   notes       String?
   receiptUrl  String?
   receiptNote String?
-  createdAt   DateTime            @default(now())
-  member      Member              @relation(fields: [memberId], references: [id])
+  createdAt   DateTime      @default(now())
+  member      Member        @relation(fields: [memberId], references: [id])
   allocations PaymentAllocation[]
 
   @@index([memberId, paidAt(sort: Desc)])
@@ -129,7 +144,6 @@ model PaymentAllocation {
   charge    Charge   @relation(fields: [chargeId], references: [id])
   payment   Payment  @relation(fields: [paymentId], references: [id])
 }
-
 
 model CashTransaction {
   id          String                @id @default(cuid())
@@ -175,20 +189,20 @@ model WhatsappTemplate {
 }
 
 model MessageDispatch {
-  id            String            @id @default(cuid())
+  id            String         @id @default(cuid())
   memberId      String?
   templateId    String?
   destination   String
   renderedBody  String
-  status        MessageStatus     @default(PENDING)
+  status        MessageStatus  @default(PENDING)
   campaignCode  String?
   campaignYear  Int?
   campaignMonth Int?
   scheduledAt   DateTime?
   sentAt        DateTime?
   errorMessage  String?
-  createdAt     DateTime          @default(now())
-  member        Member?           @relation(fields: [memberId], references: [id])
+  createdAt     DateTime       @default(now())
+  member        Member?        @relation(fields: [memberId], references: [id])
   template      WhatsappTemplate? @relation(fields: [templateId], references: [id])
 
   @@index([status, scheduledAt])
@@ -223,6 +237,11 @@ model members_import {
   joinedAt  DateTime? @db.Date
 
   @@ignore
+}
+
+enum UserRole {
+  ADMIN
+  SOCIO
 }
 
 enum MemberStatus {
