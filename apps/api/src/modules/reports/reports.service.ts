@@ -445,6 +445,81 @@ export class ReportsService {
         : []),
     ];
 
+
+    const strategicActionPlan = [
+      ...(collectionEffectiveness < 85
+        ? [
+            {
+              priority: collectionEffectiveness < 60 ? 'ALTA' : 'MEDIA',
+              area: 'Tesorería',
+              action: 'Ejecutar gestión de cobranza sobre HH.·. con deuda real mayor a cero.',
+              impact: 'Mejora de recaudación mensual y reducción de activos por cobrar.',
+              urgency: collectionEffectiveness < 60 ? 'Esta semana' : 'Este mes',
+              metric: `Cobranza efectiva actual: ${collectionEffectiveness.toFixed(1)}%`,
+            },
+          ]
+        : []),
+      ...(debtConcentrationTopFivePercentage >= 40
+        ? [
+            {
+              priority: debtConcentrationTopFivePercentage >= 60 ? 'ALTA' : 'MEDIA',
+              area: 'Tesorería / Secretaría',
+              action: 'Contactar individualmente a los cinco principales deudores antes de enviar campañas generales.',
+              impact: 'Reduce concentración de deuda y acelera recuperación de caja.',
+              urgency: 'Próximos 7 días',
+              metric: `Top 5 concentra ${debtConcentrationTopFivePercentage.toFixed(1)}% de la deuda`,
+            },
+          ]
+        : []),
+      ...(monthsOfCoverage !== null && monthsOfCoverage < 3
+        ? [
+            {
+              priority: monthsOfCoverage < 1.5 ? 'ALTA' : 'MEDIA',
+              area: 'Tesorería / Comisión',
+              action: 'Revisar egresos no esenciales y definir mínimo operativo de caja.',
+              impact: 'Aumenta resistencia financiera ante retrasos de cobranza.',
+              urgency: monthsOfCoverage < 1.5 ? 'Inmediata' : 'Este mes',
+              metric: `Cobertura actual: ${monthsOfCoverage.toFixed(1)} meses`,
+            },
+          ]
+        : []),
+      ...(activeWithoutPhone > 0
+        ? [
+            {
+              priority: activeWithoutPhone >= Math.max(3, activeMemberCount * 0.1) ? 'MEDIA' : 'BAJA',
+              area: 'Secretaría',
+              action: 'Actualizar teléfonos de HH.·. activos sin contacto registrado.',
+              impact: 'Mejora velocidad de comunicación y gestión de cobranza.',
+              urgency: 'Próximo ciclo administrativo',
+              metric: `${activeWithoutPhone} HH.·. activos sin teléfono`,
+            },
+          ]
+        : []),
+      ...(netTrend < 0
+        ? [
+            {
+              priority: 'MEDIA',
+              area: 'Tesorería',
+              action: 'Comparar rubros de egresos de los últimos 3 meses contra los 3 anteriores.',
+              impact: 'Detecta deterioro del flujo operativo antes de que afecte caja.',
+              urgency: 'Antes del próximo cierre mensual',
+              metric: `Tendencia neta: ${netTrend.toFixed(0)}`,
+            },
+          ]
+        : []),
+    ];
+
+    if (strategicActionPlan.length === 0) {
+      strategicActionPlan.push({
+        priority: 'BAJA',
+        area: 'Gestión general',
+        action: 'Mantener control mensual de caja, cobranza, padrón activo y cobertura de contacto.',
+        impact: 'Sostiene estabilidad operativa y evita deterioro silencioso.',
+        urgency: 'Mensual',
+        metric: `Salud financiera: ${financialHealthScore}/100`,
+      });
+    }
+
     return {
       generatedAt: queryDate.toISOString(),
       currentMonth: this.monthLabel(currentYear, currentMonth),
@@ -504,6 +579,7 @@ export class ReportsService {
         previousNet,
         strategicAlerts,
         strategicRecommendations,
+        strategicActionPlan,
       },
     };
   }
