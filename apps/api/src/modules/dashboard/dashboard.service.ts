@@ -1,39 +1,14 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable } from '@nestjs/common';
 import {
-  CashTransactionStatus,
   MemberCategory,
   MemberStatus,
   PaymentStatus,
-  Prisma,
-} from "@prisma/client";
-import { PrismaService } from "../prisma/prisma.service";
+} from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
 import {
   buildCurrentRatesMap,
   buildDebtSnapshot,
-} from "../members/member-debt.utils";
-
-type DashboardMember = Prisma.MemberGetPayload<{
-  include: {
-    payments: true;
-    statusHistory: true;
-    categoryHistory: true;
-  };
-}>;
-
-const MONTHS_ES = [
-  "enero",
-  "febrero",
-  "marzo",
-  "abril",
-  "mayo",
-  "junio",
-  "julio",
-  "agosto",
-  "septiembre",
-  "octubre",
-  "noviembre",
-  "diciembre",
-];
+} from '../members/member-debt.utils';
 
 @Injectable()
 export class DashboardService {
@@ -43,80 +18,63 @@ export class DashboardService {
     const today = new Date();
     const monthStart = startOfMonth(today);
     const nextMonthStart = addMonths(monthStart, 1);
-    const lastYearStart = addMonths(monthStart, -11);
 
-    const [members, rates, payments, cashTransactions, dispatches] =
-      await Promise.all([
-        this.prisma.member.findMany({
-          include: {
-            payments: {
-              where: { status: PaymentStatus.REGISTERED },
-              orderBy: [{ periodYear: "desc" }, { periodMonth: "desc" }],
+    const [members, rates, payments, cashTransactions] = await Promise.all([
+      this.prisma.member.findMany({
+        include: {
+          payments: {
+            where: {
+              status: PaymentStatus.REGISTERED,
             },
-            statusHistory: {
-              orderBy: { effectiveFrom: "desc" },
+            orderBy: [{ periodYear: 'desc' }, { periodMonth: 'desc' }],
+          },
+          statusHistory: {
+            orderBy: {
+              effectiveFrom: 'desc',
             },
-            categoryHistory: {
-              orderBy: { effectiveFrom: "desc" },
+          },
+          categoryHistory: {
+            orderBy: {
+              effectiveFrom: 'desc',
             },
           },
-          orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-        }),
-        this.prisma.monthlyRate.findMany({
-          where: {
-            validFrom: { lte: today },
-            OR: [{ validTo: null }, { validTo: { gt: today } }],
+        },
+        orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+      }),
+      this.prisma.monthlyRate.findMany({
+        where: {
+          validFrom: {
+            lte: today,
           },
-          orderBy: [{ category: "asc" }, { validFrom: "desc" }],
-        }),
-        this.prisma.payment.findMany({
-          where: {
-            status: PaymentStatus.REGISTERED,
-          },
-        }),
-        this.prisma.cashTransaction.findMany({
-          where: {
-            status: CashTransactionStatus.REGISTERED,
-          },
-        }),
-        this.prisma.messageDispatch.findMany({
-          orderBy: [{ createdAt: "desc" }],
-          take: 500,
-        }),
-      ]);
+          OR: [
+            {
+              validTo: null,
+            },
+            {
+              validTo: {
+                gt: today,
+              },
+            },
+          ],
+        },
+        orderBy: [{ category: 'asc' }, { validFrom: 'desc' }],
+      }),
+      this.prisma.payment.findMany({
+        where: {
+          status: PaymentStatus.REGISTERED,
+        },
+      }),
+      this.prisma.cashTransaction.findMany(),
+    ]);
 
     const currentRates = buildCurrentRatesMap(rates, today);
 
-    const activeMembers = members.filter(
-      (member) => member.status === MemberStatus.ACTIVE,
-    );
-    const inactiveMembers = members.filter(
-      (member) => member.status === MemberStatus.INACTIVE,
-    );
-
     const membersByCategoryMap = new Map<MemberCategory, number>();
-    const membersByGradeMap = new Map<string, number>();
+    const activeMembersByGradeMap = new Map<string, number>();
 
+    let activeMembers = 0;
     let ageSum = 0;
     let ageCount = 0;
-
-    for (const member of members) {
-      membersByCategoryMap.set(
-        member.category,
-        (membersByCategoryMap.get(member.category) ?? 0) + 1,
-      );
-
-      const gradeKey = member.grade ?? "SIN_GRADO";
-      membersByGradeMap.set(
-        gradeKey,
-        (membersByGradeMap.get(gradeKey) ?? 0) + 1,
-      );
-
-      if (member.birthDate) {
-        ageSum += calculateAge(member.birthDate, today);
-        ageCount += 1;
-      }
-    }
 
     const birthdaysThisMonth = members
       .filter(
@@ -126,7 +84,8 @@ export class DashboardService {
       )
       .sort(
         (a, b) =>
-          (a.birthDate?.getUTCDate() ?? 0) - (b.birthDate?.getUTCDate() ?? 0),
+          (a.birthDate?.getUTCDate() ?? 0) -
+          (b.birthDate?.getUTCDate() ?? 0),
       )
       .map((member) => ({
         id: member.id,
@@ -135,49 +94,22 @@ export class DashboardService {
         day: member.birthDate!.getUTCDate(),
       }));
 
-    const debtSnapshots = members.map((member) => {
-      const snapshot = buildDebtSnapshot(member, currentRates, today);
-      const realDebt = Number(snapshot.debt);
-
-      return {
-        member,
-        snapshot: {
-          ...snapshot,
-          debt: realDebt,
-          months: snapshot.months.filter((month) => Number(month.amount) > 0),
-        },
-      };
-    });
+    const debtSnapshots = members.map((member) => ({
+      member,
+      snapshot: buildDebtSnapshot(member, currentRates, today),
+    }));
 
     const debtors = debtSnapshots
-      .filter((item) => item.member.status === MemberStatus.ACTIVE)
-      .filter((item) => Number(item.snapshot.debt) > 0)
-      .map((item) => {
-        const debtMonths = item.snapshot.months.filter(
-          (month) => Number(month.amount) > 0,
-        );
-        const overdueMonths = debtMonths.filter((month) => month.overdue);
-        const owesCurrentMonth = debtMonths.some(
-          (month) => month.isCurrentMonth,
-        );
-
-        return {
-          id: item.member.id,
-          fullName: `${item.member.lastName}, ${item.member.firstName}`,
-          matricula: item.member.matricula,
-          category: item.member.category,
-          grade: item.member.grade,
-          phone: item.member.phone,
-          totalDebt: debtMonths.reduce(
-            (sum, month) => sum + Number(month.amount),
-            0,
-          ),
-          monthsOwed: debtMonths.length,
-          owesCurrentMonth,
-          overdueMonthsCount: overdueMonths.length,
-          overdueMonthLabels: overdueMonths.map((month) => month.label),
-        };
-      })
+      .filter((item) => item.snapshot.debt > 0)
+      .map((item) => ({
+        id: item.member.id,
+        fullName: `${item.member.lastName}, ${item.member.firstName}`,
+        matricula: item.member.matricula,
+        totalDebt: item.snapshot.debt,
+        overdueMonthsCount: item.snapshot.overdueMonthsCount,
+        monthsOwed: item.snapshot.monthsOwed,
+        owesCurrentMonth: item.snapshot.owesCurrentMonth,
+      }))
       .sort((a, b) => {
         if (b.totalDebt !== a.totalDebt) {
           return b.totalDebt - a.totalDebt;
@@ -186,17 +118,21 @@ export class DashboardService {
         return b.monthsOwed - a.monthsOwed;
       });
 
-    const totalDebtToDate = debtors.reduce(
-      (sum, debtor) => sum + Number(debtor.totalDebt),
+    const totalDebtToDate = debtSnapshots.reduce(
+      (sum, item) => sum + item.snapshot.debt,
       0,
     );
 
-    const totalCashIn = cashTransactions
-      .filter((transaction) => transaction.direction === "IN")
+    const registeredCashTransactions = cashTransactions.filter(
+      (transaction) => transaction.status !== 'VOID',
+    );
+
+    const totalCashIn = registeredCashTransactions
+      .filter((transaction) => transaction.direction === 'IN')
       .reduce((sum, transaction) => sum + Number(transaction.amount), 0);
 
-    const totalCashOut = cashTransactions
-      .filter((transaction) => transaction.direction === "OUT")
+    const totalCashOut = registeredCashTransactions
+      .filter((transaction) => transaction.direction === 'OUT')
       .reduce((sum, transaction) => sum + Number(transaction.amount), 0);
 
     const currentMonthCollection = payments
@@ -208,19 +144,19 @@ export class DashboardService {
       )
       .reduce((sum, payment) => sum + Number(payment.amount), 0);
 
-    const currentMonthCashIn = cashTransactions
+    const currentMonthCashIn = registeredCashTransactions
       .filter(
         (transaction) =>
-          transaction.direction === "IN" &&
+          transaction.direction === 'IN' &&
           transaction.occurredAt >= monthStart &&
           transaction.occurredAt < nextMonthStart,
       )
       .reduce((sum, transaction) => sum + Number(transaction.amount), 0);
 
-    const currentMonthCashOut = cashTransactions
+    const currentMonthCashOut = registeredCashTransactions
       .filter(
         (transaction) =>
-          transaction.direction === "OUT" &&
+          transaction.direction === 'OUT' &&
           transaction.occurredAt >= monthStart &&
           transaction.occurredAt < nextMonthStart,
       )
@@ -230,53 +166,45 @@ export class DashboardService {
     let currentMonthUncollected = 0;
     let activeContributionBase = 0;
 
-    const expectedByCategoryMap = new Map<
-      MemberCategory,
-      {
-        category: MemberCategory;
-        activeMembers: number;
-        unitAmount: number;
-        expectedTotal: number;
-      }
-    >();
-
     for (const member of members) {
+      membersByCategoryMap.set(
+        member.category,
+        (membersByCategoryMap.get(member.category) ?? 0) + 1,
+      );
+
+      if (member.status === MemberStatus.ACTIVE) {
+        activeMembers += 1;
+
+        const gradeKey = member.grade ?? 'SIN_GRADO';
+        activeMembersByGradeMap.set(
+          gradeKey,
+          (activeMembersByGradeMap.get(gradeKey) ?? 0) + 1,
+        );
+      }
+
+      if (member.birthDate) {
+        ageSum += calculateAge(member.birthDate, today);
+        ageCount += 1;
+      }
+
       if (!isActiveInMonth(member, monthStart, nextMonthStart)) {
         continue;
       }
 
+      activeContributionBase += 1;
+
       const monthCategory =
         resolveCategoryForMonth(member, monthStart, nextMonthStart) ??
         member.category;
+
       const expectedAmount = currentRates.get(monthCategory) ?? 0;
-
-      if (expectedAmount <= 0) {
-        continue;
-      }
-
-      activeContributionBase += 1;
       currentMonthExpected += expectedAmount;
-
-      const expectedByCategory = expectedByCategoryMap.get(monthCategory) ?? {
-        category: monthCategory,
-        activeMembers: 0,
-        unitAmount: expectedAmount,
-        expectedTotal: 0,
-      };
-
-      expectedByCategory.activeMembers += 1;
-      expectedByCategory.unitAmount = expectedAmount;
-      expectedByCategory.expectedTotal += expectedAmount;
-      expectedByCategoryMap.set(monthCategory, expectedByCategory);
 
       const snapshot = debtSnapshots.find(
         (item) => item.member.id === member.id,
       )?.snapshot;
-      const owesCurrentMonthWithAmount = snapshot?.months.some(
-        (month) => month.isCurrentMonth && Number(month.amount) > 0,
-      );
 
-      if (owesCurrentMonthWithAmount) {
+      if (snapshot?.owesCurrentMonth) {
         currentMonthUncollected += expectedAmount;
       }
     }
@@ -291,59 +219,6 @@ export class DashboardService {
         ? currentMonthCollection / activeContributionBase
         : 0;
 
-    const collectionEffectiveness =
-      currentMonthExpected > 0
-        ? (currentMonthCollection / currentMonthExpected) * 100
-        : 0;
-
-    const currentMonthCollectionGap = Math.max(
-      0,
-      currentMonthExpected - currentMonthCollection,
-    );
-
-    const monthlyCashHistory = buildMonthlyCashHistory(
-      cashTransactions.filter(
-        (transaction) => transaction.occurredAt >= lastYearStart,
-      ),
-      monthStart,
-      12,
-    );
-
-    const averageIncomeLast12 =
-      monthlyCashHistory.length > 0
-        ? monthlyCashHistory.reduce((sum, item) => sum + item.income, 0) /
-          monthlyCashHistory.length
-        : 0;
-
-    const averageExpenseLast12 =
-      monthlyCashHistory.length > 0
-        ? monthlyCashHistory.reduce((sum, item) => sum + item.expense, 0) /
-          monthlyCashHistory.length
-        : 0;
-
-    const monthlyNet = currentMonthCashIn - currentMonthCashOut;
-    const averageNetLast12 = averageIncomeLast12 - averageExpenseLast12;
-    const cashBalance = totalCashIn - totalCashOut;
-    const monthsOfCoverage =
-      averageExpenseLast12 > 0 ? cashBalance / averageExpenseLast12 : null;
-
-    const membersWithPhone = members.filter(
-      (member) => member.phone && member.phone.replace(/\D/g, "").length > 0,
-    ).length;
-
-    const membersWithEmail = members.filter(
-      (member) => member.email && member.email.trim().length > 0,
-    ).length;
-
-    const recentDispatchesThisMonth = dispatches.filter(
-      (dispatch) =>
-        dispatch.createdAt >= monthStart && dispatch.createdAt < nextMonthStart,
-    );
-
-    const categoriesStrategic = Array.from(expectedByCategoryMap.values()).sort(
-      (a, b) => b.expectedTotal - a.expectedTotal,
-    );
-
     return {
       people: {
         totalMembers: members.length,
@@ -353,77 +228,24 @@ export class DashboardService {
             count,
           }),
         ),
-        byGrade: Array.from(membersByGradeMap.entries()).map(
+        byGrade: Array.from(activeMembersByGradeMap.entries()).map(
           ([grade, count]) => ({
             grade,
             count,
           }),
         ),
-        activeMembers: activeMembers.length,
-        inactiveMembers: inactiveMembers.length,
+        activeMembers,
         averageAge: ageCount > 0 ? ageSum / ageCount : 0,
         birthdaysThisMonth,
-        publicManagement: {
-          membersWithPhone,
-          membersWithoutPhone: members.length - membersWithPhone,
-          membersWithEmail,
-          membersWithoutEmail: members.length - membersWithEmail,
-          contactCoveragePercentage:
-            members.length > 0 ? (membersWithPhone / members.length) * 100 : 0,
-        },
       },
       accounting: {
-        cashBalance,
-        currentMonth: monthLabel(
-          today.getUTCFullYear(),
-          today.getUTCMonth() + 1,
-        ),
+        cashBalance: totalCashIn - totalCashOut,
         currentMonthCollection,
-        currentMonthExpected,
-        currentMonthCollectionGap,
-        collectionEffectiveness,
-        operatingCashFlow: monthlyNet,
+        operatingCashFlow: currentMonthCashIn - currentMonthCashOut,
         debtors,
-        debtorsCount: debtors.length,
-        debtorsPercentage:
-          activeMembers.length > 0
-            ? (debtors.length / activeMembers.length) * 100
-            : 0,
         totalDebtToDate,
         delinquencyIndex,
         averageMonthlyContribution,
-        averageIncomeLast12,
-        averageExpenseLast12,
-        averageNetLast12,
-        monthsOfCoverage,
-        monthlyCashHistory,
-        expectedByCategory: categoriesStrategic,
-        publicManagement: {
-          messagesRegisteredThisMonth: recentDispatchesThisMonth.length,
-          activeContributionBase,
-          collectionRisk:
-            collectionEffectiveness >= 85
-              ? "LOW"
-              : collectionEffectiveness >= 65
-                ? "MEDIUM"
-                : "HIGH",
-          liquidityRisk:
-            monthsOfCoverage === null
-              ? "UNKNOWN"
-              : monthsOfCoverage >= 3
-                ? "LOW"
-                : monthsOfCoverage >= 1
-                  ? "MEDIUM"
-                  : "HIGH",
-          concentrationRisk:
-            debtors.length > 0 && totalDebtToDate > 0
-              ? (debtors
-                  .slice(0, 5)
-                  .reduce((sum, debtor) => sum + debtor.totalDebt, 0) /
-                  totalDebtToDate) *
-                100
-              : 0,
-        },
       },
     };
   }
@@ -457,7 +279,7 @@ function overlaps(
   monthStart: Date,
   monthEnd: Date,
 ): boolean {
-  const effectiveTo = to ?? new Date("2999-12-31T00:00:00.000Z");
+  const effectiveTo = to ?? new Date('2999-12-31T00:00:00.000Z');
 
   return (
     from.getTime() < monthEnd.getTime() &&
@@ -515,56 +337,4 @@ function resolveCategoryForMonth(
   }
 
   return member.category ?? null;
-}
-
-function buildMonthlyCashHistory(
-  transactions: Array<{
-    occurredAt: Date;
-    direction: string;
-    amount: Prisma.Decimal | number;
-  }>,
-  currentMonthStart: Date,
-  monthsCount: number,
-) {
-  const periods = Array.from({ length: monthsCount }, (_, index) => {
-    const date = addMonths(currentMonthStart, index - (monthsCount - 1));
-    const year = date.getUTCFullYear();
-    const month = date.getUTCMonth() + 1;
-    const period = `${year}-${String(month).padStart(2, "0")}`;
-
-    return {
-      period,
-      label: monthLabel(year, month),
-      income: 0,
-      expense: 0,
-      net: 0,
-    };
-  });
-
-  const map = new Map(periods.map((period) => [period.period, period]));
-
-  for (const transaction of transactions) {
-    const year = transaction.occurredAt.getUTCFullYear();
-    const month = transaction.occurredAt.getUTCMonth() + 1;
-    const period = `${year}-${String(month).padStart(2, "0")}`;
-    const current = map.get(period);
-
-    if (!current) {
-      continue;
-    }
-
-    if (transaction.direction === "IN") {
-      current.income += Number(transaction.amount);
-    } else {
-      current.expense += Number(transaction.amount);
-    }
-
-    current.net = current.income - current.expense;
-  }
-
-  return periods;
-}
-
-function monthLabel(year: number, month: number) {
-  return `${MONTHS_ES[month - 1]} ${year}`;
 }
