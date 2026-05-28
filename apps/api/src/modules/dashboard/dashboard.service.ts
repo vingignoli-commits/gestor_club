@@ -137,20 +137,25 @@ export class DashboardService {
 
     const debtSnapshots = members.map((member) => {
       const snapshot = buildDebtSnapshot(member, currentRates, today);
-      const realDebt = Number(snapshot.debt);
+      const debtMonths = snapshot.months.filter(
+        (month) => Number(month.amount) > 0,
+      );
+      const realDebt = debtMonths.reduce(
+        (sum, month) => sum + Number(month.amount),
+        0,
+      );
 
       return {
         member,
         snapshot: {
           ...snapshot,
           debt: realDebt,
-          months: snapshot.months.filter((month) => Number(month.amount) > 0),
+          months: debtMonths,
         },
       };
     });
 
     const debtors = debtSnapshots
-      .filter((item) => item.member.status === MemberStatus.ACTIVE)
       .filter((item) => Number(item.snapshot.debt) > 0)
       .map((item) => {
         const debtMonths = item.snapshot.months.filter(
@@ -167,6 +172,7 @@ export class DashboardService {
           matricula: item.member.matricula,
           category: item.member.category,
           grade: item.member.grade,
+          status: item.member.status,
           phone: item.member.phone,
           totalDebt: debtMonths.reduce(
             (sum, month) => sum + Number(month.amount),
@@ -393,9 +399,7 @@ export class DashboardService {
         debtors,
         debtorsCount: debtors.length,
         debtorsPercentage:
-          activeMembers.length > 0
-            ? (debtors.length / activeMembers.length) * 100
-            : 0,
+          members.length > 0 ? (debtors.length / members.length) * 100 : 0,
         totalDebtToDate,
         delinquencyIndex,
         averageMonthlyContribution,
