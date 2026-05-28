@@ -36,7 +36,8 @@ type ResetPasswordDto = {
 type RecoverAdminDto = {
   email: string;
   recoveryKey: string;
-  password: string;
+  password?: string;
+  newPassword?: string;
 };
 
 @Injectable()
@@ -102,7 +103,9 @@ export class AuthService {
       throw new UnauthorizedException('Clave de recuperación inválida.');
     }
 
-    if (!this.isStrongEnoughPassword(dto.password)) {
+    const password = (dto.password ?? dto.newPassword ?? '').trim();
+
+    if (!this.isStrongEnoughPassword(password)) {
       throw new BadRequestException(
         'La contraseña debe tener al menos 8 caracteres.',
       );
@@ -117,7 +120,7 @@ export class AuthService {
       throw new NotFoundException('Administrador no encontrado.');
     }
 
-    const passwordData = this.hashPassword(dto.password);
+    const passwordData = this.hashPassword(password);
 
     const updated = await this.prisma.user.update({
       where: { id: user.id },
@@ -353,6 +356,6 @@ export class AuthService {
   }
 
   private isStrongEnoughPassword(password: string) {
-    return typeof password === 'string' && password.length >= 8;
+    return typeof password === 'string' && password.trim().length >= 8;
   }
 }
