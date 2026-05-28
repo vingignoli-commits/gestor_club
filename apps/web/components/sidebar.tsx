@@ -31,8 +31,10 @@ export function Sidebar() {
   return (
     <aside className="flex min-h-screen w-full flex-col border-r border-ink/10 bg-white p-4 lg:w-72">
       <div className="mb-8 rounded-3xl border border-ink/10 bg-ink/5 p-4">
-        <div className="club-wordmark text-ink">
-          R.·.L.·. PROGRESO Nº 100
+        <div className="club-wordmark-wrap">
+          <div className="club-wordmark">
+            R.·.L.·. PROGRESO Nº 100
+          </div>
         </div>
         <div className="mt-1 text-xs uppercase tracking-[0.2em] text-ink/50">
           Administración integral
