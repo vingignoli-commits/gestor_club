@@ -22,6 +22,12 @@ type User = {
   permissions: string[];
 };
 
+type LoginResponse = {
+  accessToken?: string;
+  token?: string;
+  user: User;
+};
+
 type AuthCtx = {
   user: User | null;
   loading: boolean;
@@ -51,6 +57,12 @@ function normalizePath(pathname: string) {
   return `/${pathname.split('/').filter(Boolean)[0] ?? ''}`;
 }
 
+function clearStoredAuth() {
+  localStorage.removeItem('accessToken');
+  localStorage.removeItem('auth_token');
+  localStorage.removeItem('auth_user');
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -59,6 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const token = localStorage.getItem('accessToken');
 
     if (!token) {
+      clearStoredAuth();
       setLoading(false);
       return;
     }
@@ -67,24 +80,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .get<User>('/auth/me')
       .then(setUser)
       .catch(() => {
-        localStorage.removeItem('accessToken');
+        clearStoredAuth();
         setUser(null);
       })
       .finally(() => setLoading(false));
   }, []);
 
   async function login(email: string, password: string) {
-    const res = await api.post<{ accessToken: string; user: User }>('/auth/login', {
+    const res = await api.post<LoginResponse>('/auth/login', {
       email,
       password,
     });
 
-    localStorage.setItem('accessToken', res.accessToken);
+    const token = res.accessToken ?? res.token;
+
+    if (!token) {
+      throw new Error('El servidor no devolvió token de sesión.');
+    }
+
+    localStorage.setItem('accessToken', token);
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('auth_user');
     setUser(res.user);
   }
 
   function logout() {
-    localStorage.removeItem('accessToken');
+    clearStoredAuth();
     setUser(null);
   }
 
