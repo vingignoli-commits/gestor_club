@@ -73,15 +73,27 @@ td {
   font-display: swap;
 }
 
+.club-wordmark-wrap {
+  width: 100%;
+  min-width: 0;
+}
+
 .club-wordmark {
+  display: block;
+  width: 100%;
   font-family: 'Delaqrus', Georgia, serif;
-  white-space: nowrap;
+  font-size: clamp(0.72rem, 2.25vw, 1.02rem);
   line-height: 1;
-  letter-spacing: 0.02em;
-  font-size: clamp(0.9rem, 3.2vw, 1.35rem);
-  transform: scaleX(0.94);
+  letter-spacing: -0.025em;
+  white-space: nowrap;
+  transform: scaleX(0.82);
   transform-origin: left center;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: clip;
+  color: inherit;
+}
+
+@media (min-width: 768px) {
+  .club-wordmark {
+    font-size: 1.05rem;
+    transform: scaleX(0.86);
+  }
 }
