@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Patch, Post } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { LoginDto } from './dto/login.dto';
 import { AuthService } from './auth.service';
@@ -12,13 +12,19 @@ export class AuthController {
     return this.authService.login(dto);
   }
 
+  @Get('me')
+  me(@Headers('authorization') authorization?: string) {
+    return this.authService.me(authorization);
+  }
+
   @Post('recover-admin')
   recoverAdmin(
     @Body()
     dto: {
       email: string;
       recoveryKey: string;
-      password: string;
+      password?: string;
+      newPassword?: string;
     },
   ) {
     return this.authService.recoverAdmin(dto);
