@@ -86,10 +86,36 @@ export class AuthService {
       role: user.role,
     };
 
+    const accessToken = this.signToken(authUser);
+
     return {
-      token: this.signToken(authUser),
-      user: authUser,
+      accessToken,
+      token: accessToken,
+      user: this.publicUser(authUser, true),
     };
+  }
+
+  async me(authorization?: string) {
+    const token = this.extractBearerToken(authorization);
+    const payload = this.verifyToken(token);
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.id },
+    });
+
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('Sesión inválida.');
+    }
+
+    return this.publicUser(
+      {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        role: user.role,
+      },
+      user.isActive,
+    );
   }
 
   async recoverAdmin(dto: RecoverAdminDto) {
@@ -132,13 +158,15 @@ export class AuthService {
       },
     });
 
-    return {
-      id: updated.id,
-      email: updated.email,
-      fullName: updated.fullName,
-      role: updated.role,
-      isActive: updated.isActive,
-    };
+    return this.publicUser(
+      {
+        id: updated.id,
+        email: updated.email,
+        fullName: updated.fullName,
+        role: updated.role,
+      },
+      updated.isActive,
+    );
   }
 
   async listUsers() {
@@ -160,12 +188,13 @@ export class AuthService {
   async createUser(dto: CreateUserDto) {
     const email = dto.email.trim().toLowerCase();
     const fullName = dto.fullName.trim();
+    const password = dto.password.trim();
 
     if (!email || !fullName) {
       throw new BadRequestException('Email y nombre completo son obligatorios.');
     }
 
-    if (!this.isStrongEnoughPassword(dto.password)) {
+    if (!this.isStrongEnoughPassword(password)) {
       throw new BadRequestException(
         'La contraseña debe tener al menos 8 caracteres.',
       );
@@ -181,7 +210,7 @@ export class AuthService {
       throw new BadRequestException('Ya existe un usuario con ese email.');
     }
 
-    const passwordData = this.hashPassword(dto.password);
+    const passwordData = this.hashPassword(password);
 
     return this.prisma.user.create({
       data: {
@@ -244,13 +273,15 @@ export class AuthService {
       throw new NotFoundException('Usuario no encontrado.');
     }
 
-    if (!this.isStrongEnoughPassword(dto.password)) {
+    const password = dto.password.trim();
+
+    if (!this.isStrongEnoughPassword(password)) {
       throw new BadRequestException(
         'La contraseña debe tener al menos 8 caracteres.',
       );
     }
 
-    const passwordData = this.hashPassword(dto.password);
+    const passwordData = this.hashPassword(password);
 
     return this.prisma.user.update({
       where: { id },
@@ -304,6 +335,52 @@ export class AuthService {
       fullName: payload.fullName,
       role: payload.role,
     };
+  }
+
+  private publicUser(user: AuthUser, isActive: boolean) {
+    return {
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      role: user.role,
+      isActive,
+      permissions: this.permissionsForRole(user.role),
+    };
+  }
+
+  private permissionsForRole(role: UserRole) {
+    if (role === UserRole.ADMIN) {
+      return [
+        'dashboard:read',
+        'members:read',
+        'members:write',
+        'treasury:read',
+        'treasury:write',
+        'cash:read',
+        'cash:write',
+        'reports:read',
+        'messaging:read',
+        'messaging:write',
+        'settings:read',
+        'settings:write',
+      ];
+    }
+
+    return ['dashboard:read', 'members:read'];
+  }
+
+  private extractBearerToken(authorization?: string) {
+    if (!authorization) {
+      throw new UnauthorizedException('Falta token de sesión.');
+    }
+
+    const [type, token] = authorization.split(' ');
+
+    if (type !== 'Bearer' || !token) {
+      throw new UnauthorizedException('Token de sesión inválido.');
+    }
+
+    return token;
   }
 
   private signToken(user: AuthUser) {
