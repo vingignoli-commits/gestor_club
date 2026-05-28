@@ -1,6 +1,7 @@
-import { Body, Controller, Get, Headers, Post } from '@nestjs/common';
-import { AuthService } from './auth.service';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
 import { LoginDto } from './dto/login.dto';
+import { AuthService } from './auth.service';
 
 @Controller('auth')
 export class AuthController {
@@ -8,22 +9,7 @@ export class AuthController {
 
   @Post('login')
   login(@Body() dto: LoginDto) {
-    return this.authService.login(dto.email, dto.password);
-  }
-
-  @Post('refresh')
-  refresh() {
-    return this.authService.refresh();
-  }
-
-  @Post('logout')
-  logout() {
-    return { success: true };
-  }
-
-  @Get('me')
-  me(@Headers('authorization') authorization?: string) {
-    return this.authService.me(authorization);
+    return this.authService.login(dto);
   }
 
   @Post('recover-admin')
@@ -31,23 +17,52 @@ export class AuthController {
     @Body()
     dto: {
       email: string;
-      fullName?: string;
-      newPassword: string;
       recoveryKey: string;
+      password: string;
     },
   ) {
     return this.authService.recoverAdmin(dto);
   }
 
-  @Post('users/socio')
-  createSocioUser(
+  @Get('users')
+  listUsers() {
+    return this.authService.listUsers();
+  }
+
+  @Post('users')
+  createUser(
     @Body()
     dto: {
       email: string;
       fullName: string;
+      role: UserRole;
       password: string;
     },
   ) {
-    return this.authService.createSocioUser(dto);
+    return this.authService.createUser(dto);
+  }
+
+  @Patch('users/:id')
+  updateUser(
+    @Param('id') id: string,
+    @Body()
+    dto: {
+      fullName?: string;
+      role?: UserRole;
+      isActive?: boolean;
+    },
+  ) {
+    return this.authService.updateUser(id, dto);
+  }
+
+  @Post('users/:id/reset-password')
+  resetUserPassword(
+    @Param('id') id: string,
+    @Body()
+    dto: {
+      password: string;
+    },
+  ) {
+    return this.authService.resetUserPassword(id, dto);
   }
 }
