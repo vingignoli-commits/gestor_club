@@ -95,7 +95,7 @@ export class DashboardService {
     );
 
     const membersByCategoryMap = new Map<MemberCategory, number>();
-    const membersByGradeMap = new Map<string, number>();
+    const activeMembersByGradeMap = new Map<string, number>();
 
     let ageSum = 0;
     let ageCount = 0;
@@ -106,11 +106,13 @@ export class DashboardService {
         (membersByCategoryMap.get(member.category) ?? 0) + 1,
       );
 
-      const gradeKey = member.grade ?? "SIN_GRADO";
-      membersByGradeMap.set(
-        gradeKey,
-        (membersByGradeMap.get(gradeKey) ?? 0) + 1,
-      );
+      if (member.status === MemberStatus.ACTIVE) {
+        const gradeKey = member.grade ?? "SIN_GRADO";
+        activeMembersByGradeMap.set(
+          gradeKey,
+          (activeMembersByGradeMap.get(gradeKey) ?? 0) + 1,
+        );
+      }
 
       if (member.birthDate) {
         ageSum += calculateAge(member.birthDate, today);
@@ -353,7 +355,7 @@ export class DashboardService {
             count,
           }),
         ),
-        byGrade: Array.from(membersByGradeMap.entries()).map(
+        byGrade: Array.from(activeMembersByGradeMap.entries()).map(
           ([grade, count]) => ({
             grade,
             count,
