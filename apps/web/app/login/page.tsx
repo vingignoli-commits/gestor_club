@@ -10,7 +10,6 @@ export default function LoginPage() {
   const [mode, setMode] = useState<'login' | 'recover'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('Administrador');
   const [recoveryKey, setRecoveryKey] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [error, setError] = useState('');
@@ -24,10 +23,10 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await login(email, password);
+      await login(email.trim(), password);
       window.location.href = '/';
-    } catch {
-      setError('Usuario o contraseña incorrectos.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Usuario o contraseña incorrectos.');
     } finally {
       setLoading(false);
     }
@@ -37,17 +36,36 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     setSuccess('');
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanRecoveryKey = recoveryKey.trim();
+    const cleanNewPassword = newPassword.trim();
+
+    if (!cleanEmail) {
+      setError('El email admin es obligatorio.');
+      return;
+    }
+
+    if (!cleanRecoveryKey) {
+      setError('La clave de recuperación es obligatoria.');
+      return;
+    }
+
+    if (cleanNewPassword.length < 8) {
+      setError('La nueva contraseña debe tener al menos 8 caracteres.');
+      return;
+    }
+
     setLoading(true);
 
     try {
       await api.post('/auth/recover-admin', {
-        email,
-        fullName,
-        recoveryKey,
-        newPassword,
+        email: cleanEmail,
+        recoveryKey: cleanRecoveryKey,
+        password: cleanNewPassword,
       });
 
-      setPassword(newPassword);
+      setPassword(cleanNewPassword);
       setRecoveryKey('');
       setNewPassword('');
       setSuccess('Administrador recuperado. Ya podés ingresar con la nueva contraseña.');
@@ -100,7 +118,6 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="current-password"
                 required
-                minLength={8}
                 className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm outline-none focus:border-accent"
               />
             </div>
@@ -159,18 +176,6 @@ export default function LoginPage() {
 
             <div>
               <label className="mb-2 block text-sm font-medium text-ink/80">
-                Nombre visible
-              </label>
-              <input
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                required
-                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm outline-none focus:border-accent"
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-ink/80">
                 Clave de recuperación
               </label>
               <input
@@ -191,14 +196,22 @@ export default function LoginPage() {
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
-                minLength={8}
                 className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm outline-none focus:border-accent"
               />
+              <p className="mt-2 text-xs text-ink/50">
+                Mínimo 8 caracteres. Los espacios al inicio o final se eliminan.
+              </p>
             </div>
 
             {error && (
               <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">
                 {error}
+              </div>
+            )}
+
+            {success && (
+              <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                {success}
               </div>
             )}
 
