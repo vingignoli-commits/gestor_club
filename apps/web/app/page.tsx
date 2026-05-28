@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useState } from 'react';
-import { SectionCard } from '../components/section-card';
-import { api } from '../lib/api';
+import { useEffect, useMemo, useState } from "react";
+import { SectionCard } from "../components/section-card";
+import { api } from "../lib/api";
 
 type DashboardData = {
   people: {
@@ -49,6 +49,7 @@ type DashboardData = {
       phone: string | null;
       totalDebt: number;
       monthsOwed: number;
+      owesCurrentMonth: boolean;
       overdueMonthsCount: number;
       overdueMonthLabels: string[];
     }>;
@@ -77,40 +78,40 @@ type DashboardData = {
     publicManagement: {
       messagesRegisteredThisMonth: number;
       activeContributionBase: number;
-      collectionRisk: 'LOW' | 'MEDIUM' | 'HIGH';
-      liquidityRisk: 'UNKNOWN' | 'LOW' | 'MEDIUM' | 'HIGH';
+      collectionRisk: "LOW" | "MEDIUM" | "HIGH";
+      liquidityRisk: "UNKNOWN" | "LOW" | "MEDIUM" | "HIGH";
       concentrationRisk: number;
     };
   };
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
-  SIMPLE: 'Simple',
-  DOBLE: 'Doble',
-  ESTUDIANTE: 'Estudiante',
-  SOCIAL: 'Social',
-  MENOR: 'Menor',
-  HONOR: 'Honor',
+  SIMPLE: "Simple",
+  DOBLE: "Doble",
+  ESTUDIANTE: "Estudiante",
+  SOCIAL: "Social",
+  MENOR: "Menor",
+  HONOR: "Honor",
 };
 
 const GRADE_LABELS: Record<string, string> = {
-  APRENDIZ: 'Aprendiz',
-  COMPANERO: 'Compañero',
-  MAESTRO: 'Maestro',
-  SIN_GRADO: 'Sin grado',
+  APRENDIZ: "Aprendiz",
+  COMPANERO: "Compañero",
+  MAESTRO: "Maestro",
+  SIN_GRADO: "Sin grado",
 };
 
 const RISK_LABELS: Record<string, string> = {
-  LOW: 'Bajo',
-  MEDIUM: 'Medio',
-  HIGH: 'Alto',
-  UNKNOWN: 'Sin datos',
+  LOW: "Bajo",
+  MEDIUM: "Medio",
+  HIGH: "Alto",
+  UNKNOWN: "Sin datos",
 };
 
 function fmtMoney(n: number) {
-  return new Intl.NumberFormat('es-AR', {
-    style: 'currency',
-    currency: 'ARS',
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
     maximumFractionDigits: 0,
   }).format(Number(n || 0));
 }
@@ -124,21 +125,85 @@ function categoryLabel(value: string) {
 }
 
 function gradeLabel(value: string | null) {
-  if (!value) return 'Sin grado';
+  if (!value) return "Sin grado";
   return GRADE_LABELS[value] ?? value;
 }
 
 function signedTone(value: number) {
-  if (value > 0) return 'text-emerald-700';
-  if (value < 0) return 'text-rose-700';
-  return 'text-ink';
+  if (value > 0) return "text-emerald-700";
+  if (value < 0) return "text-rose-700";
+  return "text-ink";
 }
 
-function riskClasses(risk: 'LOW' | 'MEDIUM' | 'HIGH' | 'UNKNOWN') {
-  if (risk === 'LOW') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
-  if (risk === 'MEDIUM') return 'border-amber-200 bg-amber-50 text-amber-700';
-  if (risk === 'HIGH') return 'border-rose-200 bg-rose-50 text-rose-700';
-  return 'border-slate-200 bg-slate-50 text-slate-700';
+function debtorSeverityClass(item: {
+  overdueMonthsCount: number;
+  owesCurrentMonth: boolean;
+}) {
+  if (item.owesCurrentMonth && item.overdueMonthsCount > 2) {
+    return {
+      card: "border-rose-200 bg-rose-50",
+      amountBox: "bg-rose-100",
+      amountText: "text-rose-800",
+      label: "Riesgo alto",
+      description: "Más de 2 meses vencidos + mes actual",
+    };
+  }
+
+  if (item.owesCurrentMonth && item.overdueMonthsCount === 1) {
+    return {
+      card: "border-amber-200 bg-amber-50",
+      amountBox: "bg-amber-100",
+      amountText: "text-amber-800",
+      label: "Riesgo medio",
+      description: "1 mes vencido + mes actual",
+    };
+  }
+
+  if (item.owesCurrentMonth && item.overdueMonthsCount === 0) {
+    return {
+      card: "border-emerald-200 bg-emerald-50",
+      amountBox: "bg-emerald-100",
+      amountText: "text-emerald-800",
+      label: "Riesgo bajo",
+      description: "Solo debe el mes actual",
+    };
+  }
+
+  if (item.overdueMonthsCount > 2) {
+    return {
+      card: "border-rose-200 bg-rose-50",
+      amountBox: "bg-rose-100",
+      amountText: "text-rose-800",
+      label: "Riesgo alto",
+      description: "Más de 2 meses vencidos",
+    };
+  }
+
+  if (item.overdueMonthsCount > 0) {
+    return {
+      card: "border-amber-200 bg-amber-50",
+      amountBox: "bg-amber-100",
+      amountText: "text-amber-800",
+      label: "Riesgo medio",
+      description: "Meses vencidos sin mes actual",
+    };
+  }
+
+  return {
+    card: "border-ink/10 bg-white",
+    amountBox: "bg-ink/5",
+    amountText: "text-ink",
+    label: "Sin vencidos",
+    description: "Deuda sin vencimientos clasificados",
+  };
+}
+
+function riskClasses(risk: "LOW" | "MEDIUM" | "HIGH" | "UNKNOWN") {
+  if (risk === "LOW")
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (risk === "MEDIUM") return "border-amber-200 bg-amber-50 text-amber-700";
+  if (risk === "HIGH") return "border-rose-200 bg-rose-50 text-rose-700";
+  return "border-slate-200 bg-slate-50 text-slate-700";
 }
 
 function InfoHint({ text }: { text: string }) {
@@ -156,19 +221,19 @@ function MetricCard({
   label,
   value,
   description,
-  tone = 'neutral',
+  tone = "neutral",
 }: {
   label: string;
   value: string | number;
   description?: string;
-  tone?: 'neutral' | 'accent' | 'green' | 'red' | 'amber';
+  tone?: "neutral" | "accent" | "green" | "red" | "amber";
 }) {
   const classes = {
-    neutral: 'border-ink/10 bg-ink/5 text-ink',
-    accent: 'border-accent/20 bg-accent/10 text-accent',
-    green: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-    red: 'border-rose-200 bg-rose-50 text-rose-700',
-    amber: 'border-amber-200 bg-amber-50 text-amber-700',
+    neutral: "border-ink/10 bg-ink/5 text-ink",
+    accent: "border-accent/20 bg-accent/10 text-accent",
+    green: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    red: "border-rose-200 bg-rose-50 text-rose-700",
+    amber: "border-amber-200 bg-amber-50 text-amber-700",
   }[tone];
 
   return (
@@ -187,23 +252,23 @@ function Gauge({ value }: { value: number }) {
   const tone =
     safeValue >= 50
       ? {
-          color: '#dc2626',
-          bg: 'bg-rose-50',
-          text: 'text-rose-700',
-          label: 'Alta',
+          color: "#dc2626",
+          bg: "bg-rose-50",
+          text: "text-rose-700",
+          label: "Alta",
         }
       : safeValue >= 25
         ? {
-            color: '#d97706',
-            bg: 'bg-amber-50',
-            text: 'text-amber-700',
-            label: 'Media',
+            color: "#d97706",
+            bg: "bg-amber-50",
+            text: "text-amber-700",
+            label: "Media",
           }
         : {
-            color: '#059669',
-            bg: 'bg-emerald-50',
-            text: 'text-emerald-700',
-            label: 'Baja',
+            color: "#059669",
+            bg: "bg-emerald-50",
+            text: "text-emerald-700",
+            label: "Baja",
           };
 
   const centerX = 110;
@@ -298,53 +363,178 @@ function MiniColumnChart({
     net: number;
   }>;
 }) {
-  const maxValue = Math.max(
-    ...rows.map((row) => Math.max(Number(row.income), Number(row.expense))),
+  const chartWidth = 920;
+  const chartHeight = 260;
+  const plotTop = 18;
+  const plotRight = 18;
+  const plotBottom = 48;
+  const plotLeft = 78;
+  const plotWidth = chartWidth - plotLeft - plotRight;
+  const plotHeight = chartHeight - plotTop - plotBottom;
+
+  const maxAbsValue = Math.max(
+    ...rows.map((row) =>
+      Math.max(
+        Math.abs(Number(row.income)),
+        Math.abs(Number(row.expense)),
+        Math.abs(Number(row.net)),
+      ),
+    ),
     1,
   );
+
+  const yMax = Math.ceil(maxAbsValue / 1000) * 1000 || 1000;
+  const yTicks = [yMax, yMax * 0.75, yMax * 0.5, yMax * 0.25, 0];
+  const groupWidth = rows.length > 0 ? plotWidth / rows.length : plotWidth;
+  const barWidth = Math.min(18, Math.max(8, groupWidth * 0.2));
+
+  function y(value: number) {
+    return plotTop + plotHeight - (Math.max(0, value) / yMax) * plotHeight;
+  }
+
+  function x(index: number) {
+    return plotLeft + groupWidth * index + groupWidth / 2;
+  }
+
+  const netPoints = rows
+    .map((row, index) => `${x(index)},${y(Math.max(0, row.net))}`)
+    .join(" ");
 
   return (
     <div className="rounded-2xl border border-ink/10 bg-white p-4">
       <div className="mb-4 text-lg font-semibold text-ink">
         Ingresos vs egresos últimos 12 meses
-        <InfoHint text="Muestra movimientos de caja registrados y no anulados. Sirve para ver tendencia, no promesa futura." />
+        <InfoHint text="Columnas: ingresos y egresos registrados y no anulados. Línea: saldo mensual neto. Eje Y: valores de referencia en pesos." />
       </div>
 
       {rows.length === 0 ? (
-        <div className="py-8 text-sm text-ink/60">Sin movimientos registrados.</div>
+        <div className="py-8 text-sm text-ink/60">
+          Sin movimientos registrados.
+        </div>
       ) : (
         <div className="overflow-x-auto">
-          <div className="flex min-w-[760px] items-end gap-4 border-b border-ink/10 pb-4">
-            {rows.map((row) => {
-              const incomeHeight = Math.max(4, (row.income / maxValue) * 160);
-              const expenseHeight = Math.max(4, (row.expense / maxValue) * 160);
+          <svg
+            viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+            className="min-w-[920px] rounded-2xl bg-ink/[0.025]"
+            role="img"
+            aria-label="Ingresos, egresos y saldo mensual de los últimos 12 meses"
+          >
+            {yTicks.map((tick) => (
+              <g key={tick}>
+                <line
+                  x1={plotLeft}
+                  y1={y(tick)}
+                  x2={chartWidth - plotRight}
+                  y2={y(tick)}
+                  stroke="#e5e7eb"
+                  strokeWidth="1"
+                />
+                <text
+                  x={plotLeft - 10}
+                  y={y(tick) + 4}
+                  textAnchor="end"
+                  fontSize="11"
+                  fill="#6b7280"
+                >
+                  {fmtMoney(tick)}
+                </text>
+              </g>
+            ))}
+
+            <line
+              x1={plotLeft}
+              y1={plotTop + plotHeight}
+              x2={chartWidth - plotRight}
+              y2={plotTop + plotHeight}
+              stroke="#9ca3af"
+              strokeWidth="1.5"
+            />
+
+            {rows.map((row, index) => {
+              const centerX = x(index);
+              const incomeHeight = Math.max(
+                2,
+                (row.income / yMax) * plotHeight,
+              );
+              const expenseHeight = Math.max(
+                2,
+                (row.expense / yMax) * plotHeight,
+              );
+              const incomeY = plotTop + plotHeight - incomeHeight;
+              const expenseY = plotTop + plotHeight - expenseHeight;
+              const month = row.label.split(" ")[0].slice(0, 3);
+              const year = row.label.split(" ")[1]?.slice(2) ?? "";
 
               return (
-                <div key={row.period} className="flex flex-1 flex-col items-center gap-2">
-                  <div className="flex h-44 items-end gap-1">
-                    <div
-                      title={`Ingresos ${fmtMoney(row.income)}`}
-                      className="w-4 rounded-t-lg bg-emerald-600"
-                      style={{ height: `${incomeHeight}px` }}
-                    />
-                    <div
-                      title={`Egresos ${fmtMoney(row.expense)}`}
-                      className="w-4 rounded-t-lg bg-rose-600"
-                      style={{ height: `${expenseHeight}px` }}
-                    />
-                  </div>
-                  <div className="max-w-20 text-center text-[10px] font-semibold text-ink/70">
-                    {row.label.split(' ')[0].slice(0, 3)} {row.label.split(' ')[1]}
-                  </div>
-                  <div className={`text-[10px] font-bold ${signedTone(row.net)}`}>
-                    {fmtMoney(row.net)}
-                  </div>
-                </div>
+                <g key={row.period}>
+                  <rect
+                    x={centerX - barWidth - 2}
+                    y={incomeY}
+                    width={barWidth}
+                    height={incomeHeight}
+                    rx="4"
+                    fill="#059669"
+                  >
+                    <title>{`${row.label} · Ingresos ${fmtMoney(row.income)}`}</title>
+                  </rect>
+                  <rect
+                    x={centerX + 2}
+                    y={expenseY}
+                    width={barWidth}
+                    height={expenseHeight}
+                    rx="4"
+                    fill="#e11d48"
+                  >
+                    <title>{`${row.label} · Egresos ${fmtMoney(row.expense)}`}</title>
+                  </rect>
+                  <text
+                    x={centerX}
+                    y={chartHeight - 24}
+                    textAnchor="middle"
+                    fontSize="11"
+                    fontWeight="700"
+                    fill="#374151"
+                  >
+                    {month}
+                  </text>
+                  <text
+                    x={centerX}
+                    y={chartHeight - 10}
+                    textAnchor="middle"
+                    fontSize="10"
+                    fill="#6b7280"
+                  >
+                    {year}
+                  </text>
+                </g>
               );
             })}
-          </div>
 
-          <div className="mt-3 flex gap-4 text-xs text-ink/60">
+            {rows.length > 1 && (
+              <polyline
+                points={netPoints}
+                fill="none"
+                stroke="#111827"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            )}
+
+            {rows.map((row, index) => (
+              <circle
+                key={`net-${row.period}`}
+                cx={x(index)}
+                cy={y(Math.max(0, row.net))}
+                r="4"
+                fill="#111827"
+              >
+                <title>{`${row.label} · Saldo mensual ${fmtMoney(row.net)}`}</title>
+              </circle>
+            ))}
+          </svg>
+
+          <div className="mt-3 flex flex-wrap gap-4 text-xs text-ink/60">
             <div className="flex items-center gap-2">
               <span className="h-3 w-3 rounded bg-emerald-600" />
               Ingresos
@@ -352,6 +542,10 @@ function MiniColumnChart({
             <div className="flex items-center gap-2">
               <span className="h-3 w-3 rounded bg-rose-600" />
               Egresos
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="h-1 w-6 rounded bg-ink" />
+              Saldo mensual
             </div>
           </div>
         </div>
@@ -366,13 +560,14 @@ export default function HomePage() {
 
   useEffect(() => {
     api
-      .get<DashboardData>('/dashboard/executive')
+      .get<DashboardData>("/dashboard/executive")
       .then(setData)
       .finally(() => setLoading(false));
   }, []);
 
   const sortedCategories = useMemo(
-    () => [...(data?.people.byCategory ?? [])].sort((a, b) => b.count - a.count),
+    () =>
+      [...(data?.people.byCategory ?? [])].sort((a, b) => b.count - a.count),
     [data],
   );
 
@@ -417,7 +612,11 @@ export default function HomePage() {
               />
               <MetricCard
                 label="Edad promedio"
-                value={data.people.averageAge > 0 ? data.people.averageAge.toFixed(1) : '-'}
+                value={
+                  data.people.averageAge > 0
+                    ? data.people.averageAge.toFixed(1)
+                    : "-"
+                }
                 description="Promedio calculado solo sobre HH.·. con fecha de nacimiento cargada."
               />
             </div>
@@ -476,8 +675,10 @@ export default function HomePage() {
                       >
                         <span>{item.fullName}</span>
                         <span className="font-semibold">
-                          {String(item.day).padStart(2, '0')}/
-                          {String(new Date(item.date).getUTCMonth() + 1).padStart(2, '0')}
+                          {String(item.day).padStart(2, "0")}/
+                          {String(
+                            new Date(item.date).getUTCMonth() + 1,
+                          ).padStart(2, "0")}
                         </span>
                       </div>
                     ))}
@@ -497,7 +698,9 @@ export default function HomePage() {
                       Cobertura celular
                     </div>
                     <div className="mt-2 text-xl font-bold text-ink">
-                      {fmtPercent(data.people.publicManagement.contactCoveragePercentage)}
+                      {fmtPercent(
+                        data.people.publicManagement.contactCoveragePercentage,
+                      )}
                     </div>
                   </div>
                   <div className="rounded-2xl bg-ink/5 p-4">
@@ -555,7 +758,11 @@ export default function HomePage() {
                 label="Brecha de cobranza"
                 value={fmtMoney(data.accounting.currentMonthCollectionGap)}
                 description="Diferencia entre lo esperado del mes y lo cobrado. Nunca baja de cero."
-                tone={data.accounting.currentMonthCollectionGap > 0 ? 'amber' : 'green'}
+                tone={
+                  data.accounting.currentMonthCollectionGap > 0
+                    ? "amber"
+                    : "green"
+                }
               />
             </div>
 
@@ -564,13 +771,13 @@ export default function HomePage() {
                 label="Flujo de caja operativo"
                 value={fmtMoney(data.accounting.operatingCashFlow)}
                 description="Ingresos de caja del mes menos egresos de caja del mes."
-                tone={data.accounting.operatingCashFlow >= 0 ? 'green' : 'red'}
+                tone={data.accounting.operatingCashFlow >= 0 ? "green" : "red"}
               />
               <MetricCard
                 label="Total de deudas"
                 value={fmtMoney(data.accounting.totalDebtToDate)}
                 description="Total de deuda monetaria real. No incluye meses con cuota $0."
-                tone={data.accounting.totalDebtToDate > 0 ? 'amber' : 'green'}
+                tone={data.accounting.totalDebtToDate > 0 ? "amber" : "green"}
               />
               <MetricCard
                 label="Aporte promedio mensual"
@@ -583,10 +790,10 @@ export default function HomePage() {
                 description="Recaudación real del mes dividida por recaudación esperada del mes."
                 tone={
                   data.accounting.collectionEffectiveness >= 85
-                    ? 'green'
+                    ? "green"
                     : data.accounting.collectionEffectiveness >= 65
-                      ? 'amber'
-                      : 'red'
+                      ? "amber"
+                      : "red"
                 }
               />
             </div>
@@ -610,7 +817,11 @@ export default function HomePage() {
                       Riesgo de cobranza
                     </div>
                     <div className="mt-2 text-xl font-bold">
-                      {RISK_LABELS[data.accounting.publicManagement.collectionRisk]}
+                      {
+                        RISK_LABELS[
+                          data.accounting.publicManagement.collectionRisk
+                        ]
+                      }
                     </div>
                   </div>
 
@@ -623,7 +834,11 @@ export default function HomePage() {
                       Riesgo de liquidez
                     </div>
                     <div className="mt-2 text-xl font-bold">
-                      {RISK_LABELS[data.accounting.publicManagement.liquidityRisk]}
+                      {
+                        RISK_LABELS[
+                          data.accounting.publicManagement.liquidityRisk
+                        ]
+                      }
                     </div>
                   </div>
 
@@ -632,7 +847,9 @@ export default function HomePage() {
                       Concentración deuda top 5
                     </div>
                     <div className="mt-2 text-xl font-bold text-ink">
-                      {fmtPercent(data.accounting.publicManagement.concentrationRisk)}
+                      {fmtPercent(
+                        data.accounting.publicManagement.concentrationRisk,
+                      )}
                     </div>
                   </div>
 
@@ -641,7 +858,10 @@ export default function HomePage() {
                       Mensajes registrados este mes
                     </div>
                     <div className="mt-2 text-xl font-bold text-ink">
-                      {data.accounting.publicManagement.messagesRegisteredThisMonth}
+                      {
+                        data.accounting.publicManagement
+                          .messagesRegisteredThisMonth
+                      }
                     </div>
                   </div>
 
@@ -652,7 +872,7 @@ export default function HomePage() {
                     </div>
                     <div className="mt-2 text-xl font-bold text-ink">
                       {data.accounting.monthsOfCoverage === null
-                        ? 'Sin egresos de referencia'
+                        ? "Sin egresos de referencia"
                         : `${data.accounting.monthsOfCoverage.toFixed(1)} meses`}
                     </div>
                   </div>
@@ -690,7 +910,8 @@ export default function HomePage() {
                           </span>
                         </div>
                         <div className="mt-1 text-xs text-ink/60">
-                          {item.activeMembers} HH.·. × {fmtMoney(item.unitAmount)}
+                          {item.activeMembers} HH.·. ×{" "}
+                          {fmtMoney(item.unitAmount)}
                         </div>
                       </div>
                     ))}
@@ -710,40 +931,60 @@ export default function HomePage() {
                   </div>
                 ) : (
                   <div className="max-h-[520px] space-y-3 overflow-y-auto pr-2">
-                    {debtors.map((item) => (
-                      <div
-                        key={item.id}
-                        className="rounded-2xl border border-ink/10 bg-white p-4 text-sm"
-                      >
-                        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-                          <div>
-                            <div className="font-semibold text-ink">{item.fullName}</div>
-                            <div className="mt-1 text-xs text-ink/60">
-                              Matrícula {item.matricula} · {categoryLabel(item.category)} ·{' '}
-                              {gradeLabel(item.grade)}
-                            </div>
-                            <div className="mt-1 text-xs text-ink/60">
-                              {item.phone ?? 'Sin celular'}
-                            </div>
-                            {item.overdueMonthLabels.length > 0 && (
-                              <div className="mt-2 text-xs text-ink/70">
-                                Vencidos: {item.overdueMonthLabels.join(', ')}
+                    {debtors.map((item) => {
+                      const severity = debtorSeverityClass(item);
+
+                      return (
+                        <div
+                          key={item.id}
+                          className={`rounded-2xl border p-4 text-sm ${severity.card}`}
+                        >
+                          <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                            <div>
+                              <div className="font-semibold text-ink">
+                                {item.fullName}
                               </div>
-                            )}
+                              <div className="mt-1 text-xs text-ink/60">
+                                Matrícula {item.matricula} ·{" "}
+                                {categoryLabel(item.category)} ·{" "}
+                                {gradeLabel(item.grade)}
+                              </div>
+                              <div className="mt-1 text-xs text-ink/60">
+                                {item.phone ?? "Sin celular"}
+                              </div>
+                              {item.overdueMonthLabels.length > 0 && (
+                                <div className="mt-2 text-xs text-ink/70">
+                                  Vencidos: {item.overdueMonthLabels.join(", ")}
+                                </div>
+                              )}
+                            </div>
+
+                            <div
+                              className={`rounded-2xl px-4 py-3 text-right ${severity.amountBox}`}
+                            >
+                              <div
+                                className={`text-lg font-bold ${severity.amountText}`}
+                              >
+                                {fmtMoney(item.totalDebt)}
+                              </div>
+                              <div className={`text-xs ${severity.amountText}`}>
+                                {item.monthsOwed} mes
+                                {item.monthsOwed !== 1 ? "es" : ""} con deuda
+                              </div>
+                              <div
+                                className={`mt-1 text-[11px] font-semibold ${severity.amountText}`}
+                              >
+                                {severity.label}
+                              </div>
+                            </div>
                           </div>
 
-                          <div className="rounded-2xl bg-amber-50 px-4 py-3 text-right">
-                            <div className="text-lg font-bold text-amber-700">
-                              {fmtMoney(item.totalDebt)}
-                            </div>
-                            <div className="text-xs text-amber-700">
-                              {item.monthsOwed} mes
-                              {item.monthsOwed !== 1 ? 'es' : ''} con deuda
-                            </div>
+                          <div className="mt-3 rounded-xl bg-white/60 px-3 py-2 text-xs text-ink/70">
+                            {severity.description}
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
