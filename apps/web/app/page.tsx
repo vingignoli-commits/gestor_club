@@ -363,48 +363,61 @@ function MiniColumnChart({
     net: number;
   }>;
 }) {
-  const chartWidth = 920;
-  const chartHeight = 260;
-  const plotTop = 18;
-  const plotRight = 18;
-  const plotBottom = 48;
-  const plotLeft = 78;
+  const chartWidth = 980;
+  const chartHeight = 310;
+  const plotTop = 22;
+  const plotRight = 22;
+  const plotBottom = 76;
+  const plotLeft = 86;
   const plotWidth = chartWidth - plotLeft - plotRight;
   const plotHeight = chartHeight - plotTop - plotBottom;
 
-  const maxAbsValue = Math.max(
+  const maxPositiveValue = Math.max(
     ...rows.map((row) =>
-      Math.max(
-        Math.abs(Number(row.income)),
-        Math.abs(Number(row.expense)),
-        Math.abs(Number(row.net)),
-      ),
+      Math.max(Number(row.income), Number(row.expense), Number(row.net), 0),
     ),
     1,
   );
 
-  const yMax = Math.ceil(maxAbsValue / 1000) * 1000 || 1000;
-  const yTicks = [yMax, yMax * 0.75, yMax * 0.5, yMax * 0.25, 0];
+  const minNegativeValue = Math.min(
+    ...rows.map((row) => Math.min(Number(row.net), 0)),
+    0,
+  );
+
+  const magnitude = Math.max(Math.abs(maxPositiveValue), Math.abs(minNegativeValue), 1);
+  const stepBase = magnitude >= 1000000 ? 100000 : magnitude >= 100000 ? 10000 : 1000;
+  const yMax = Math.ceil(maxPositiveValue / stepBase) * stepBase || stepBase;
+  const yMin = minNegativeValue < 0 ? Math.floor(minNegativeValue / stepBase) * stepBase : 0;
+  const yRange = yMax - yMin || 1;
+
+  const positiveMid = yMax / 2;
+  const negativeMid = yMin < 0 ? yMin / 2 : null;
+  const yTicks = negativeMid === null
+    ? [yMax, positiveMid, 0]
+    : [yMax, positiveMid, 0, negativeMid, yMin];
+
   const groupWidth = rows.length > 0 ? plotWidth / rows.length : plotWidth;
   const barWidth = Math.min(18, Math.max(8, groupWidth * 0.2));
 
   function y(value: number) {
-    return plotTop + plotHeight - (Math.max(0, value) / yMax) * plotHeight;
+    return plotTop + ((yMax - value) / yRange) * plotHeight;
   }
 
   function x(index: number) {
     return plotLeft + groupWidth * index + groupWidth / 2;
   }
 
+  const zeroY = y(0);
+
   const netPoints = rows
-    .map((row, index) => `${x(index)},${y(Math.max(0, row.net))}`)
+    .map((row, index) => `${x(index)},${y(row.net)}`)
     .join(" ");
 
   return (
     <div className="rounded-2xl border border-ink/10 bg-white p-4">
       <div className="mb-4 text-lg font-semibold text-ink">
         Ingresos vs egresos últimos 12 meses
-        <InfoHint text="Columnas: ingresos y egresos registrados y no anulados. Línea: saldo mensual neto. Eje Y: valores de referencia en pesos." />
+        <InfoHint text="Columnas: ingresos y egresos registrados y no anulados. Línea fina: saldo mensual neto. Debajo de cada mes se muestra el saldo en verde si fue positivo y rojo si fue negativo." />
       </div>
 
       {rows.length === 0 ? (
@@ -415,7 +428,7 @@ function MiniColumnChart({
         <div className="overflow-x-auto">
           <svg
             viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-            className="min-w-[920px] rounded-2xl bg-ink/[0.025]"
+            className="min-w-[980px] rounded-2xl bg-ink/[0.025]"
             role="img"
             aria-label="Ingresos, egresos y saldo mensual de los últimos 12 meses"
           >
@@ -426,8 +439,8 @@ function MiniColumnChart({
                   y1={y(tick)}
                   x2={chartWidth - plotRight}
                   y2={y(tick)}
-                  stroke="#e5e7eb"
-                  strokeWidth="1"
+                  stroke={tick === 0 ? '#9ca3af' : '#e5e7eb'}
+                  strokeWidth={tick === 0 ? '1.25' : '1'}
                 />
                 <text
                   x={plotLeft - 10}
@@ -441,29 +454,15 @@ function MiniColumnChart({
               </g>
             ))}
 
-            <line
-              x1={plotLeft}
-              y1={plotTop + plotHeight}
-              x2={chartWidth - plotRight}
-              y2={plotTop + plotHeight}
-              stroke="#9ca3af"
-              strokeWidth="1.5"
-            />
-
             {rows.map((row, index) => {
               const centerX = x(index);
-              const incomeHeight = Math.max(
-                2,
-                (row.income / yMax) * plotHeight,
-              );
-              const expenseHeight = Math.max(
-                2,
-                (row.expense / yMax) * plotHeight,
-              );
-              const incomeY = plotTop + plotHeight - incomeHeight;
-              const expenseY = plotTop + plotHeight - expenseHeight;
+              const incomeHeight = Math.max(2, zeroY - y(row.income));
+              const expenseHeight = Math.max(2, zeroY - y(row.expense));
+              const incomeY = zeroY - incomeHeight;
+              const expenseY = zeroY - expenseHeight;
               const month = row.label.split(" ")[0].slice(0, 3);
               const year = row.label.split(" ")[1]?.slice(2) ?? "";
+              const isPositiveNet = row.net >= 0;
 
               return (
                 <g key={row.period}>
@@ -489,7 +488,7 @@ function MiniColumnChart({
                   </rect>
                   <text
                     x={centerX}
-                    y={chartHeight - 24}
+                    y={chartHeight - 45}
                     textAnchor="middle"
                     fontSize="11"
                     fontWeight="700"
@@ -499,12 +498,22 @@ function MiniColumnChart({
                   </text>
                   <text
                     x={centerX}
-                    y={chartHeight - 10}
+                    y={chartHeight - 31}
                     textAnchor="middle"
                     fontSize="10"
                     fill="#6b7280"
                   >
                     {year}
+                  </text>
+                  <text
+                    x={centerX}
+                    y={chartHeight - 13}
+                    textAnchor="middle"
+                    fontSize="10"
+                    fontWeight="700"
+                    fill={isPositiveNet ? '#047857' : '#be123c'}
+                  >
+                    {fmtMoney(row.net)}
                   </text>
                 </g>
               );
@@ -515,7 +524,7 @@ function MiniColumnChart({
                 points={netPoints}
                 fill="none"
                 stroke="#111827"
-                strokeWidth="3"
+                strokeWidth="1.35"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
@@ -525,8 +534,8 @@ function MiniColumnChart({
               <circle
                 key={`net-${row.period}`}
                 cx={x(index)}
-                cy={y(Math.max(0, row.net))}
-                r="4"
+                cy={y(row.net)}
+                r="2.6"
                 fill="#111827"
               >
                 <title>{`${row.label} · Saldo mensual ${fmtMoney(row.net)}`}</title>
@@ -544,7 +553,7 @@ function MiniColumnChart({
               Egresos
             </div>
             <div className="flex items-center gap-2">
-              <span className="h-1 w-6 rounded bg-ink" />
+              <span className="h-px w-6 rounded bg-ink" />
               Saldo mensual
             </div>
           </div>
