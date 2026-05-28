@@ -210,6 +210,20 @@ function memberSearchText(member: Member) {
     .toLowerCase();
 }
 
+function badgeClass(kind: 'category' | 'status' | 'grade', value: string | null) {
+  if (kind === 'status') {
+    return value === 'ACTIVE'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+      : 'border-slate-200 bg-slate-50 text-slate-700';
+  }
+
+  if (kind === 'category' && value === 'HONOR') {
+    return 'border-amber-200 bg-amber-50 text-amber-700';
+  }
+
+  return 'border-ink/10 bg-ink/5 text-ink/70';
+}
+
 export default function MembersPage() {
   const { canEdit } = useAuth();
 
@@ -226,6 +240,7 @@ export default function MembersPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');
   const [filters, setFilters] = useState<Filters>(emptyFilters());
   const [sortField, setSortField] = useState<SortField>('lastName');
@@ -698,7 +713,7 @@ export default function MembersPage() {
         title="Cuadro del Taller"
         description="Consulta, búsqueda, ficha individual, historial, exportación y edición del Cuadro del Taller."
       >
-        <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
             <div className="text-xs uppercase tracking-wide text-ink/50">Total</div>
             <div className="mt-2 text-2xl font-bold text-ink">{members.length}</div>
@@ -725,32 +740,113 @@ export default function MembersPage() {
             className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
           />
 
-          <div className="flex flex-wrap gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
+            <button
+              type="button"
+              onClick={() => setShowAdvancedFilters((prev) => !prev)}
+              className="rounded-2xl border border-ink/10 px-4 py-3 text-sm font-semibold text-ink/80 sm:px-5"
+            >
+              {showAdvancedFilters ? 'Ocultar filtros' : 'Filtros'}
+            </button>
             <button
               type="button"
               onClick={exportExcel}
-              className="rounded-2xl border border-ink/10 px-5 py-3 text-sm font-semibold text-ink/80"
+              className="rounded-2xl border border-ink/10 px-4 py-3 text-sm font-semibold text-ink/80 sm:px-5"
             >
-              Exportar Excel
+              Excel
             </button>
             <button
               type="button"
               onClick={exportPdf}
-              className="rounded-2xl border border-ink/10 px-5 py-3 text-sm font-semibold text-ink/80"
+              className="rounded-2xl border border-ink/10 px-4 py-3 text-sm font-semibold text-ink/80 sm:px-5"
             >
-              Exportar PDF
+              PDF
             </button>
             {canEdit && (
               <button
                 type="button"
                 onClick={openCreate}
-                className="rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-white"
+                className="rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white sm:px-5"
               >
-                + Nuevo H.·.
+                + Nuevo
               </button>
             )}
           </div>
         </div>
+
+        {showAdvancedFilters && (
+          <div className="mb-6 rounded-3xl border border-ink/10 bg-white p-4">
+            <div className="mb-4 text-sm font-semibold text-ink">Filtros avanzados</div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <input
+                value={filters.matricula}
+                onChange={(e) => setFilter('matricula', e.target.value)}
+                placeholder="Matrícula"
+                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+              />
+              <input
+                value={filters.lastName}
+                onChange={(e) => setFilter('lastName', e.target.value)}
+                placeholder="Apellido"
+                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+              />
+              <input
+                value={filters.firstName}
+                onChange={(e) => setFilter('firstName', e.target.value)}
+                placeholder="Nombre"
+                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+              />
+              <input
+                value={filters.phone}
+                onChange={(e) => setFilter('phone', e.target.value)}
+                placeholder="Celular"
+                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+              />
+              <input
+                value={filters.email}
+                onChange={(e) => setFilter('email', e.target.value)}
+                placeholder="Email"
+                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+              />
+              <select
+                value={filters.category}
+                onChange={(e) => setFilter('category', e.target.value)}
+                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+              >
+                <option value="">Todas las categorías</option>
+                {CATEGORY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={filters.grade}
+                onChange={(e) => setFilter('grade', e.target.value)}
+                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+              >
+                <option value="">Todos los grados</option>
+                {GRADE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={filters.status}
+                onChange={(e) => setFilter('status', e.target.value)}
+                className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+              >
+                <option value="">Todos los estados</option>
+                {STATUS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
 
         {activeFilters.length > 0 && (
           <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -773,200 +869,235 @@ export default function MembersPage() {
             No se encontraron HH.·. con los filtros actuales.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full border-separate border-spacing-y-2">
-              <thead>
-                <tr className="text-left text-xs uppercase tracking-wide text-ink/50">
-                  <th className="px-3 py-2">
-                    <button type="button" onClick={() => toggleSort('matricula')} className="font-semibold">
-                      Matrícula {sortIndicator('matricula')}
-                    </button>
-                  </th>
-                  <th className="px-3 py-2">
-                    <button type="button" onClick={() => toggleSort('lastName')} className="font-semibold">
-                      H.·. {sortIndicator('lastName')}
-                    </button>
-                  </th>
-                  <th className="px-3 py-2">
-                    <button type="button" onClick={() => toggleSort('category')} className="font-semibold">
-                      Categoría {sortIndicator('category')}
-                    </button>
-                  </th>
-                  <th className="px-3 py-2">
-                    <button type="button" onClick={() => toggleSort('grade')} className="font-semibold">
-                      Grado {sortIndicator('grade')}
-                    </button>
-                  </th>
-                  <th className="px-3 py-2">
-                    <button type="button" onClick={() => toggleSort('phone')} className="font-semibold">
-                      Celular {sortIndicator('phone')}
-                    </button>
-                  </th>
-                  <th className="px-3 py-2">
-                    <button type="button" onClick={() => toggleSort('email')} className="font-semibold">
-                      Email {sortIndicator('email')}
-                    </button>
-                  </th>
-                  <th className="px-3 py-2">
-                    <button type="button" onClick={() => toggleSort('status')} className="font-semibold">
-                      Estado {sortIndicator('status')}
-                    </button>
-                  </th>
-                  <th className="px-3 py-2">
-                    <button type="button" onClick={() => toggleSort('birthDate')} className="font-semibold">
-                      Nacimiento {sortIndicator('birthDate')}
-                    </button>
-                  </th>
-                  <th className="px-3 py-2">Acciones</th>
-                </tr>
+          <>
+            <div className="hidden lg:block">
+              <div className="overflow-x-auto">
+                <table className="min-w-full border-separate border-spacing-y-2">
+                  <thead>
+                    <tr className="text-left text-xs uppercase tracking-wide text-ink/50">
+                      <th className="px-3 py-2">
+                        <button type="button" onClick={() => toggleSort('matricula')} className="font-semibold">
+                          Matrícula {sortIndicator('matricula')}
+                        </button>
+                      </th>
+                      <th className="px-3 py-2">
+                        <button type="button" onClick={() => toggleSort('lastName')} className="font-semibold">
+                          H.·. {sortIndicator('lastName')}
+                        </button>
+                      </th>
+                      <th className="px-3 py-2">
+                        <button type="button" onClick={() => toggleSort('category')} className="font-semibold">
+                          Categoría {sortIndicator('category')}
+                        </button>
+                      </th>
+                      <th className="px-3 py-2">
+                        <button type="button" onClick={() => toggleSort('grade')} className="font-semibold">
+                          Grado {sortIndicator('grade')}
+                        </button>
+                      </th>
+                      <th className="px-3 py-2">
+                        <button type="button" onClick={() => toggleSort('phone')} className="font-semibold">
+                          Celular {sortIndicator('phone')}
+                        </button>
+                      </th>
+                      <th className="px-3 py-2">
+                        <button type="button" onClick={() => toggleSort('email')} className="font-semibold">
+                          Email {sortIndicator('email')}
+                        </button>
+                      </th>
+                      <th className="px-3 py-2">
+                        <button type="button" onClick={() => toggleSort('status')} className="font-semibold">
+                          Estado {sortIndicator('status')}
+                        </button>
+                      </th>
+                      <th className="px-3 py-2">
+                        <button type="button" onClick={() => toggleSort('birthDate')} className="font-semibold">
+                          Nacimiento {sortIndicator('birthDate')}
+                        </button>
+                      </th>
+                      <th className="px-3 py-2">Acciones</th>
+                    </tr>
+                  </thead>
 
-                <tr className="text-left text-xs text-ink/60">
-                  <th className="px-3 py-2">
-                    <input
-                      value={filters.matricula}
-                      onChange={(e) => setFilter('matricula', e.target.value)}
-                      placeholder="Filtrar"
-                      className="w-full rounded-xl border border-ink/10 px-3 py-2 text-xs"
-                    />
-                  </th>
-                  <th className="px-3 py-2">
-                    <div className="grid gap-2">
-                      <input
-                        value={filters.lastName}
-                        onChange={(e) => setFilter('lastName', e.target.value)}
-                        placeholder="Apellido"
-                        className="w-full rounded-xl border border-ink/10 px-3 py-2 text-xs"
-                      />
-                      <input
-                        value={filters.firstName}
-                        onChange={(e) => setFilter('firstName', e.target.value)}
-                        placeholder="Nombre"
-                        className="w-full rounded-xl border border-ink/10 px-3 py-2 text-xs"
-                      />
+                  <tbody>
+                    {filteredMembers.map((m) => {
+                      const whatsappLink = buildWhatsappLink(m);
+
+                      return (
+                        <tr key={m.id} className="rounded-2xl bg-ink/5 text-sm">
+                          <td className="rounded-l-2xl px-3 py-3 font-semibold text-ink">
+                            {m.matricula}
+                          </td>
+                          <td className="px-3 py-3 text-ink">
+                            {m.lastName}, {m.firstName}
+                          </td>
+                          <td className="px-3 py-3 text-ink/80">{categoryLabel(m.category)}</td>
+                          <td className="px-3 py-3 text-ink/80">{gradeLabel(m.grade)}</td>
+                          <td className="px-3 py-3 text-ink/80">
+                            {m.phone ? (
+                              <a
+                                href={whatsappLink ?? undefined}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="underline decoration-ink/30 underline-offset-4 hover:text-accent"
+                                title="Abrir WhatsApp"
+                              >
+                                {m.phone}
+                              </a>
+                            ) : (
+                              '-'
+                            )}
+                          </td>
+                          <td className="px-3 py-3 text-ink/80">{m.email ?? '-'}</td>
+                          <td className="px-3 py-3 text-ink/80">{statusLabel(m.status)}</td>
+                          <td className="px-3 py-3 text-ink/80">{formatDateOnly(m.birthDate)}</td>
+                          <td className="rounded-r-2xl px-3 py-3">
+                            <div className="flex flex-col gap-2">
+                              <button
+                                type="button"
+                                onClick={() => openProfile(m.id)}
+                                className="rounded-xl border border-ink/10 px-3 py-2 text-xs font-semibold"
+                              >
+                                Ficha
+                              </button>
+
+                              {canEdit && (
+                                <button
+                                  type="button"
+                                  onClick={() => openEdit(m)}
+                                  className="rounded-xl border border-ink/10 px-3 py-2 text-xs font-semibold"
+                                >
+                                  Editar
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="grid gap-3 lg:hidden">
+              <div className="flex items-center justify-between gap-3 rounded-2xl border border-ink/10 bg-white px-4 py-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-ink/50">
+                  Orden
+                </div>
+                <div className="flex gap-2">
+                  <select
+                    value={sortField}
+                    onChange={(e) => setSortField(e.target.value as SortField)}
+                    className="rounded-xl border border-ink/10 px-3 py-2 text-xs"
+                  >
+                    <option value="lastName">Apellido</option>
+                    <option value="firstName">Nombre</option>
+                    <option value="matricula">Matrícula</option>
+                    <option value="category">Categoría</option>
+                    <option value="grade">Grado</option>
+                    <option value="status">Estado</option>
+                    <option value="birthDate">Nacimiento</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+                    className="rounded-xl border border-ink/10 px-3 py-2 text-xs font-semibold"
+                  >
+                    {sortDirection === 'asc' ? '↑' : '↓'}
+                  </button>
+                </div>
+              </div>
+
+              {filteredMembers.map((m) => {
+                const whatsappLink = buildWhatsappLink(m);
+
+                return (
+                  <article
+                    key={m.id}
+                    className="rounded-3xl border border-ink/10 bg-white p-4 shadow-sm"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-ink/50">
+                          Matrícula {m.matricula}
+                        </div>
+                        <div className="mt-1 text-lg font-bold leading-tight text-ink">
+                          {m.lastName}, {m.firstName}
+                        </div>
+                      </div>
+                      <span className={`shrink-0 rounded-xl border px-2 py-1 text-xs font-semibold ${badgeClass('status', m.status)}`}>
+                        {statusLabel(m.status)}
+                      </span>
                     </div>
-                  </th>
-                  <th className="px-3 py-2">
-                    <select
-                      value={filters.category}
-                      onChange={(e) => setFilter('category', e.target.value)}
-                      className="w-full rounded-xl border border-ink/10 px-3 py-2 text-xs"
-                    >
-                      <option value="">Todas</option>
-                      {CATEGORY_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </th>
-                  <th className="px-3 py-2">
-                    <select
-                      value={filters.grade}
-                      onChange={(e) => setFilter('grade', e.target.value)}
-                      className="w-full rounded-xl border border-ink/10 px-3 py-2 text-xs"
-                    >
-                      <option value="">Todos</option>
-                      {GRADE_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </th>
-                  <th className="px-3 py-2">
-                    <input
-                      value={filters.phone}
-                      onChange={(e) => setFilter('phone', e.target.value)}
-                      placeholder="Filtrar"
-                      className="w-full rounded-xl border border-ink/10 px-3 py-2 text-xs"
-                    />
-                  </th>
-                  <th className="px-3 py-2">
-                    <input
-                      value={filters.email}
-                      onChange={(e) => setFilter('email', e.target.value)}
-                      placeholder="Filtrar"
-                      className="w-full rounded-xl border border-ink/10 px-3 py-2 text-xs"
-                    />
-                  </th>
-                  <th className="px-3 py-2">
-                    <select
-                      value={filters.status}
-                      onChange={(e) => setFilter('status', e.target.value)}
-                      className="w-full rounded-xl border border-ink/10 px-3 py-2 text-xs"
-                    >
-                      <option value="">Todos</option>
-                      {STATUS_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </th>
-                  <th className="px-3 py-2" />
-                  <th className="px-3 py-2" />
-                </tr>
-              </thead>
 
-              <tbody>
-                {filteredMembers.map((m) => {
-                  const whatsappLink = buildWhatsappLink(m);
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <span className={`rounded-xl border px-2 py-1 text-xs font-semibold ${badgeClass('category', m.category)}`}>
+                        {categoryLabel(m.category)}
+                      </span>
+                      <span className={`rounded-xl border px-2 py-1 text-xs font-semibold ${badgeClass('grade', m.grade)}`}>
+                        {gradeLabel(m.grade)}
+                      </span>
+                      <span className="rounded-xl border border-ink/10 bg-ink/5 px-2 py-1 text-xs font-semibold text-ink/70">
+                        Nac. {formatDateOnly(m.birthDate)}
+                      </span>
+                    </div>
 
-                  return (
-                    <tr key={m.id} className="rounded-2xl bg-ink/5 text-sm">
-                      <td className="rounded-l-2xl px-3 py-3 font-semibold text-ink">
-                        {m.matricula}
-                      </td>
-                      <td className="px-3 py-3 text-ink">
-                        {m.lastName}, {m.firstName}
-                      </td>
-                      <td className="px-3 py-3 text-ink/80">{categoryLabel(m.category)}</td>
-                      <td className="px-3 py-3 text-ink/80">{gradeLabel(m.grade)}</td>
-                      <td className="px-3 py-3 text-ink/80">
+                    <div className="mt-4 grid gap-2 text-sm text-ink/70">
+                      <div className="flex justify-between gap-3">
+                        <span className="text-ink/50">Celular</span>
                         {m.phone ? (
                           <a
                             href={whatsappLink ?? undefined}
                             target="_blank"
                             rel="noreferrer"
-                            className="underline decoration-ink/30 underline-offset-4 hover:text-accent"
-                            title="Abrir WhatsApp"
+                            className="text-right font-semibold text-accent underline underline-offset-4"
                           >
                             {m.phone}
                           </a>
                         ) : (
-                          '-'
+                          <span>-</span>
                         )}
-                      </td>
-                      <td className="px-3 py-3 text-ink/80">{m.email ?? '-'}</td>
-                      <td className="px-3 py-3 text-ink/80">{statusLabel(m.status)}</td>
-                      <td className="px-3 py-3 text-ink/80">{formatDateOnly(m.birthDate)}</td>
-                      <td className="rounded-r-2xl px-3 py-3">
-                        <div className="flex flex-col gap-2">
-                          <button
-                            type="button"
-                            onClick={() => openProfile(m.id)}
-                            className="rounded-xl border border-ink/10 px-3 py-2 text-xs font-semibold"
-                          >
-                            Ficha
-                          </button>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <span className="text-ink/50">Email</span>
+                        <span className="max-w-[65%] truncate text-right">{m.email ?? '-'}</span>
+                      </div>
+                    </div>
 
-                          {canEdit && (
-                            <button
-                              type="button"
-                              onClick={() => openEdit(m)}
-                              className="rounded-xl border border-ink/10 px-3 py-2 text-xs font-semibold"
-                            >
-                              Editar
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openProfile(m.id)}
+                        className="rounded-2xl border border-ink/10 px-4 py-3 text-sm font-semibold text-ink"
+                      >
+                        Ficha
+                      </button>
+
+                      {canEdit ? (
+                        <button
+                          type="button"
+                          onClick={() => openEdit(m)}
+                          className="rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white"
+                        >
+                          Editar
+                        </button>
+                      ) : (
+                        <a
+                          href={whatsappLink ?? undefined}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={`rounded-2xl border px-4 py-3 text-center text-sm font-semibold ${m.phone ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'pointer-events-none border-slate-200 bg-slate-50 text-slate-500'}`}
+                        >
+                          WhatsApp
+                        </a>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </>
         )}
       </SectionCard>
 
@@ -982,7 +1113,7 @@ export default function MembersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-3 py-4">
           <div className="max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-3xl bg-white p-4 shadow-2xl sm:p-6">
             <div className="mb-5 flex items-start justify-between gap-4 border-b border-ink/10 pb-4">
-              <div>
+              <div className="min-w-0">
                 <h2 className="text-xl font-bold text-ink sm:text-2xl">
                   Ficha completa del H.·.
                 </h2>
@@ -994,7 +1125,7 @@ export default function MembersPage() {
               <button
                 type="button"
                 onClick={closeProfile}
-                className="rounded-2xl border border-ink/10 px-4 py-2 text-sm font-semibold text-ink/70 hover:bg-ink/5"
+                className="shrink-0 rounded-2xl border border-ink/10 px-4 py-2 text-sm font-semibold text-ink/70 hover:bg-ink/5"
               >
                 Cerrar
               </button>
@@ -1007,7 +1138,7 @@ export default function MembersPage() {
                     Datos principales
                   </div>
 
-                  <div className="grid gap-3 text-sm">
+                  <div className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-1">
                     <div><strong>Nombre:</strong> {selectedProfile.firstName}</div>
                     <div><strong>Apellido:</strong> {selectedProfile.lastName}</div>
                     <div><strong>Matrícula:</strong> {selectedProfile.matricula}</div>
@@ -1018,7 +1149,7 @@ export default function MembersPage() {
                     <div><strong>Fecha de nacimiento:</strong> {formatDateOnly(selectedProfile.birthDate)}</div>
                     <div><strong>Celular:</strong> {selectedProfile.phone ?? '-'}</div>
                     <div><strong>Email:</strong> {selectedProfile.email ?? '-'}</div>
-                    <div><strong>Notas:</strong> {selectedProfile.notes ?? '-'}</div>
+                    <div className="sm:col-span-2 xl:col-span-1"><strong>Notas:</strong> {selectedProfile.notes ?? '-'}</div>
                   </div>
                 </div>
 
@@ -1096,38 +1227,56 @@ export default function MembersPage() {
                   {(selectedProfile.payments ?? []).length === 0 ? (
                     <div className="text-sm text-ink/60">Sin pagos registrados.</div>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full border-separate border-spacing-y-2">
-                        <thead>
-                          <tr className="text-left text-xs uppercase tracking-wide text-ink/50">
-                            <th className="px-3 py-2">Fecha</th>
-                            <th className="px-3 py-2">Período</th>
-                            <th className="px-3 py-2">Monto</th>
-                            <th className="px-3 py-2">Método</th>
-                            <th className="px-3 py-2">Estado</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(selectedProfile.payments ?? []).slice(0, 12).map((payment) => (
-                            <tr key={payment.id} className="rounded-2xl bg-ink/5 text-sm">
-                              <td className="rounded-l-2xl px-3 py-3">
-                                {formatDateOnly(payment.paidAt)}
-                              </td>
-                              <td className="px-3 py-3">
-                                {String(payment.periodMonth).padStart(2, '0')}/{payment.periodYear}
-                              </td>
-                              <td className="px-3 py-3 font-semibold">
-                                {fmtMoney(payment.amount)}
-                              </td>
-                              <td className="px-3 py-3">{payment.methodCode}</td>
-                              <td className="rounded-r-2xl px-3 py-3">
-                                {payment.status}
-                              </td>
+                    <>
+                      <div className="hidden overflow-x-auto sm:block">
+                        <table className="min-w-full border-separate border-spacing-y-2">
+                          <thead>
+                            <tr className="text-left text-xs uppercase tracking-wide text-ink/50">
+                              <th className="px-3 py-2">Fecha</th>
+                              <th className="px-3 py-2">Período</th>
+                              <th className="px-3 py-2">Monto</th>
+                              <th className="px-3 py-2">Método</th>
+                              <th className="px-3 py-2">Estado</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                          </thead>
+                          <tbody>
+                            {(selectedProfile.payments ?? []).slice(0, 12).map((payment) => (
+                              <tr key={payment.id} className="rounded-2xl bg-ink/5 text-sm">
+                                <td className="rounded-l-2xl px-3 py-3">
+                                  {formatDateOnly(payment.paidAt)}
+                                </td>
+                                <td className="px-3 py-3">
+                                  {String(payment.periodMonth).padStart(2, '0')}/{payment.periodYear}
+                                </td>
+                                <td className="px-3 py-3 font-semibold">
+                                  {fmtMoney(payment.amount)}
+                                </td>
+                                <td className="px-3 py-3">{payment.methodCode}</td>
+                                <td className="rounded-r-2xl px-3 py-3">
+                                  {payment.status}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div className="space-y-3 sm:hidden">
+                        {(selectedProfile.payments ?? []).slice(0, 12).map((payment) => (
+                          <div key={payment.id} className="rounded-2xl bg-ink/5 p-3 text-sm">
+                            <div className="flex justify-between gap-3">
+                              <span className="font-semibold text-ink">
+                                {String(payment.periodMonth).padStart(2, '0')}/{payment.periodYear}
+                              </span>
+                              <span className="font-bold text-ink">{fmtMoney(payment.amount)}</span>
+                            </div>
+                            <div className="mt-2 text-xs text-ink/60">
+                              {formatDateOnly(payment.paidAt)} · {payment.methodCode} · {payment.status}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
                   )}
                 </div>
 
@@ -1136,13 +1285,13 @@ export default function MembersPage() {
                     Acciones rápidas
                   </div>
 
-                  <div className="flex flex-wrap gap-3">
+                  <div className="grid gap-3 sm:flex sm:flex-wrap">
                     {selectedProfile.phone && (
                       <a
                         href={buildWhatsappLink(selectedProfile) ?? undefined}
                         target="_blank"
                         rel="noreferrer"
-                        className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700"
+                        className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-700"
                       >
                         Abrir WhatsApp
                       </a>
@@ -1173,7 +1322,7 @@ export default function MembersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-3 py-4">
           <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-3xl bg-white p-4 shadow-2xl sm:p-6">
             <div className="mb-5 flex items-start justify-between gap-4 border-b border-ink/10 pb-4">
-              <div>
+              <div className="min-w-0">
                 <h2 className="text-xl font-bold text-ink sm:text-2xl">
                   {isEditing ? 'Editar H.·.' : 'Nuevo H.·.'}
                 </h2>
@@ -1185,7 +1334,7 @@ export default function MembersPage() {
               <button
                 type="button"
                 onClick={closeForm}
-                className="rounded-2xl border border-ink/10 px-4 py-2 text-sm font-semibold text-ink/70 hover:bg-ink/5"
+                className="shrink-0 rounded-2xl border border-ink/10 px-4 py-2 text-sm font-semibold text-ink/70 hover:bg-ink/5"
               >
                 Cerrar
               </button>
