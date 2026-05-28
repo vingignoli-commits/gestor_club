@@ -94,25 +94,23 @@ export class DashboardService {
       (member) => member.status === MemberStatus.INACTIVE,
     );
 
-    const membersByCategoryMap = new Map<MemberCategory, number>();
+    const activeMembersByCategoryMap = new Map<MemberCategory, number>();
     const activeMembersByGradeMap = new Map<string, number>();
 
     let ageSum = 0;
     let ageCount = 0;
 
-    for (const member of members) {
-      membersByCategoryMap.set(
+    for (const member of activeMembers) {
+      activeMembersByCategoryMap.set(
         member.category,
-        (membersByCategoryMap.get(member.category) ?? 0) + 1,
+        (activeMembersByCategoryMap.get(member.category) ?? 0) + 1,
       );
 
-      if (member.status === MemberStatus.ACTIVE) {
-        const gradeKey = member.grade ?? "SIN_GRADO";
-        activeMembersByGradeMap.set(
-          gradeKey,
-          (activeMembersByGradeMap.get(gradeKey) ?? 0) + 1,
-        );
-      }
+      const gradeKey = member.grade ?? "SIN_GRADO";
+      activeMembersByGradeMap.set(
+        gradeKey,
+        (activeMembersByGradeMap.get(gradeKey) ?? 0) + 1,
+      );
 
       if (member.birthDate) {
         ageSum += calculateAge(member.birthDate, today);
@@ -120,7 +118,7 @@ export class DashboardService {
       }
     }
 
-    const birthdaysThisMonth = members
+    const birthdaysThisMonth = activeMembers
       .filter(
         (member) =>
           member.birthDate &&
@@ -243,6 +241,10 @@ export class DashboardService {
     >();
 
     for (const member of members) {
+      if (member.status !== MemberStatus.ACTIVE) {
+        continue;
+      }
+
       if (!isActiveInMonth(member, monthStart, nextMonthStart)) {
         continue;
       }
@@ -250,6 +252,7 @@ export class DashboardService {
       const monthCategory =
         resolveCategoryForMonth(member, monthStart, nextMonthStart) ??
         member.category;
+
       const expectedAmount = currentRates.get(monthCategory) ?? 0;
 
       if (expectedAmount <= 0) {
@@ -274,6 +277,7 @@ export class DashboardService {
       const snapshot = debtSnapshots.find(
         (item) => item.member.id === member.id,
       )?.snapshot;
+
       const owesCurrentMonthWithAmount = snapshot?.months.some(
         (month) => month.isCurrentMonth && Number(month.amount) > 0,
       );
@@ -326,6 +330,7 @@ export class DashboardService {
     const monthlyNet = currentMonthCashIn - currentMonthCashOut;
     const averageNetLast12 = averageIncomeLast12 - averageExpenseLast12;
     const cashBalance = totalCashIn - totalCashOut;
+
     const monthsOfCoverage =
       averageExpenseLast12 > 0 ? cashBalance / averageExpenseLast12 : null;
 
@@ -349,7 +354,7 @@ export class DashboardService {
     return {
       people: {
         totalMembers: members.length,
-        byCategory: Array.from(membersByCategoryMap.entries()).map(
+        byCategory: Array.from(activeMembersByCategoryMap.entries()).map(
           ([category, count]) => ({
             category,
             count,
