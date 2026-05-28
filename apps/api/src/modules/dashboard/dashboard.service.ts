@@ -1,16 +1,16 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable } from "@nestjs/common";
 import {
   CashTransactionStatus,
   MemberCategory,
   MemberStatus,
   PaymentStatus,
   Prisma,
-} from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
+} from "@prisma/client";
+import { PrismaService } from "../prisma/prisma.service";
 import {
   buildCurrentRatesMap,
   buildDebtSnapshot,
-} from '../members/member-debt.utils';
+} from "../members/member-debt.utils";
 
 type DashboardMember = Prisma.MemberGetPayload<{
   include: {
@@ -21,18 +21,18 @@ type DashboardMember = Prisma.MemberGetPayload<{
 }>;
 
 const MONTHS_ES = [
-  'enero',
-  'febrero',
-  'marzo',
-  'abril',
-  'mayo',
-  'junio',
-  'julio',
-  'agosto',
-  'septiembre',
-  'octubre',
-  'noviembre',
-  'diciembre',
+  "enero",
+  "febrero",
+  "marzo",
+  "abril",
+  "mayo",
+  "junio",
+  "julio",
+  "agosto",
+  "septiembre",
+  "octubre",
+  "noviembre",
+  "diciembre",
 ];
 
 @Injectable()
@@ -51,23 +51,23 @@ export class DashboardService {
           include: {
             payments: {
               where: { status: PaymentStatus.REGISTERED },
-              orderBy: [{ periodYear: 'desc' }, { periodMonth: 'desc' }],
+              orderBy: [{ periodYear: "desc" }, { periodMonth: "desc" }],
             },
             statusHistory: {
-              orderBy: { effectiveFrom: 'desc' },
+              orderBy: { effectiveFrom: "desc" },
             },
             categoryHistory: {
-              orderBy: { effectiveFrom: 'desc' },
+              orderBy: { effectiveFrom: "desc" },
             },
           },
-          orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+          orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
         }),
         this.prisma.monthlyRate.findMany({
           where: {
             validFrom: { lte: today },
             OR: [{ validTo: null }, { validTo: { gt: today } }],
           },
-          orderBy: [{ category: 'asc' }, { validFrom: 'desc' }],
+          orderBy: [{ category: "asc" }, { validFrom: "desc" }],
         }),
         this.prisma.payment.findMany({
           where: {
@@ -80,14 +80,16 @@ export class DashboardService {
           },
         }),
         this.prisma.messageDispatch.findMany({
-          orderBy: [{ createdAt: 'desc' }],
+          orderBy: [{ createdAt: "desc" }],
           take: 500,
         }),
       ]);
 
     const currentRates = buildCurrentRatesMap(rates, today);
 
-    const activeMembers = members.filter((member) => member.status === MemberStatus.ACTIVE);
+    const activeMembers = members.filter(
+      (member) => member.status === MemberStatus.ACTIVE,
+    );
     const inactiveMembers = members.filter(
       (member) => member.status === MemberStatus.INACTIVE,
     );
@@ -104,8 +106,11 @@ export class DashboardService {
         (membersByCategoryMap.get(member.category) ?? 0) + 1,
       );
 
-      const gradeKey = member.grade ?? 'SIN_GRADO';
-      membersByGradeMap.set(gradeKey, (membersByGradeMap.get(gradeKey) ?? 0) + 1);
+      const gradeKey = member.grade ?? "SIN_GRADO";
+      membersByGradeMap.set(
+        gradeKey,
+        (membersByGradeMap.get(gradeKey) ?? 0) + 1,
+      );
 
       if (member.birthDate) {
         ageSum += calculateAge(member.birthDate, today);
@@ -116,7 +121,8 @@ export class DashboardService {
     const birthdaysThisMonth = members
       .filter(
         (member) =>
-          member.birthDate && member.birthDate.getUTCMonth() === today.getUTCMonth(),
+          member.birthDate &&
+          member.birthDate.getUTCMonth() === today.getUTCMonth(),
       )
       .sort(
         (a, b) =>
@@ -146,21 +152,32 @@ export class DashboardService {
     const debtors = debtSnapshots
       .filter((item) => item.member.status === MemberStatus.ACTIVE)
       .filter((item) => Number(item.snapshot.debt) > 0)
-      .map((item) => ({
-        id: item.member.id,
-        fullName: `${item.member.lastName}, ${item.member.firstName}`,
-        matricula: item.member.matricula,
-        category: item.member.category,
-        grade: item.member.grade,
-        phone: item.member.phone,
-        totalDebt: Number(item.snapshot.debt),
-        monthsOwed: item.snapshot.months.filter((month) => Number(month.amount) > 0)
-          .length,
-        overdueMonthsCount: item.snapshot.months.filter(
-          (month) => month.overdue && Number(month.amount) > 0,
-        ).length,
-        overdueMonthLabels: item.snapshot.overdueMonthLabels,
-      }))
+      .map((item) => {
+        const debtMonths = item.snapshot.months.filter(
+          (month) => Number(month.amount) > 0,
+        );
+        const overdueMonths = debtMonths.filter((month) => month.overdue);
+        const owesCurrentMonth = debtMonths.some(
+          (month) => month.isCurrentMonth,
+        );
+
+        return {
+          id: item.member.id,
+          fullName: `${item.member.lastName}, ${item.member.firstName}`,
+          matricula: item.member.matricula,
+          category: item.member.category,
+          grade: item.member.grade,
+          phone: item.member.phone,
+          totalDebt: debtMonths.reduce(
+            (sum, month) => sum + Number(month.amount),
+            0,
+          ),
+          monthsOwed: debtMonths.length,
+          owesCurrentMonth,
+          overdueMonthsCount: overdueMonths.length,
+          overdueMonthLabels: overdueMonths.map((month) => month.label),
+        };
+      })
       .sort((a, b) => {
         if (b.totalDebt !== a.totalDebt) {
           return b.totalDebt - a.totalDebt;
@@ -175,11 +192,11 @@ export class DashboardService {
     );
 
     const totalCashIn = cashTransactions
-      .filter((transaction) => transaction.direction === 'IN')
+      .filter((transaction) => transaction.direction === "IN")
       .reduce((sum, transaction) => sum + Number(transaction.amount), 0);
 
     const totalCashOut = cashTransactions
-      .filter((transaction) => transaction.direction === 'OUT')
+      .filter((transaction) => transaction.direction === "OUT")
       .reduce((sum, transaction) => sum + Number(transaction.amount), 0);
 
     const currentMonthCollection = payments
@@ -194,7 +211,7 @@ export class DashboardService {
     const currentMonthCashIn = cashTransactions
       .filter(
         (transaction) =>
-          transaction.direction === 'IN' &&
+          transaction.direction === "IN" &&
           transaction.occurredAt >= monthStart &&
           transaction.occurredAt < nextMonthStart,
       )
@@ -203,7 +220,7 @@ export class DashboardService {
     const currentMonthCashOut = cashTransactions
       .filter(
         (transaction) =>
-          transaction.direction === 'OUT' &&
+          transaction.direction === "OUT" &&
           transaction.occurredAt >= monthStart &&
           transaction.occurredAt < nextMonthStart,
       )
@@ -229,7 +246,8 @@ export class DashboardService {
       }
 
       const monthCategory =
-        resolveCategoryForMonth(member, monthStart, nextMonthStart) ?? member.category;
+        resolveCategoryForMonth(member, monthStart, nextMonthStart) ??
+        member.category;
       const expectedAmount = currentRates.get(monthCategory) ?? 0;
 
       if (expectedAmount <= 0) {
@@ -251,7 +269,9 @@ export class DashboardService {
       expectedByCategory.expectedTotal += expectedAmount;
       expectedByCategoryMap.set(monthCategory, expectedByCategory);
 
-      const snapshot = debtSnapshots.find((item) => item.member.id === member.id)?.snapshot;
+      const snapshot = debtSnapshots.find(
+        (item) => item.member.id === member.id,
+      )?.snapshot;
       const owesCurrentMonthWithAmount = snapshot?.months.some(
         (month) => month.isCurrentMonth && Number(month.amount) > 0,
       );
@@ -267,7 +287,9 @@ export class DashboardService {
         : 0;
 
     const averageMonthlyContribution =
-      activeContributionBase > 0 ? currentMonthCollection / activeContributionBase : 0;
+      activeContributionBase > 0
+        ? currentMonthCollection / activeContributionBase
+        : 0;
 
     const collectionEffectiveness =
       currentMonthExpected > 0
@@ -280,7 +302,9 @@ export class DashboardService {
     );
 
     const monthlyCashHistory = buildMonthlyCashHistory(
-      cashTransactions.filter((transaction) => transaction.occurredAt >= lastYearStart),
+      cashTransactions.filter(
+        (transaction) => transaction.occurredAt >= lastYearStart,
+      ),
       monthStart,
       12,
     );
@@ -304,7 +328,7 @@ export class DashboardService {
       averageExpenseLast12 > 0 ? cashBalance / averageExpenseLast12 : null;
 
     const membersWithPhone = members.filter(
-      (member) => member.phone && member.phone.replace(/\D/g, '').length > 0,
+      (member) => member.phone && member.phone.replace(/\D/g, "").length > 0,
     ).length;
 
     const membersWithEmail = members.filter(
@@ -312,7 +336,8 @@ export class DashboardService {
     ).length;
 
     const recentDispatchesThisMonth = dispatches.filter(
-      (dispatch) => dispatch.createdAt >= monthStart && dispatch.createdAt < nextMonthStart,
+      (dispatch) =>
+        dispatch.createdAt >= monthStart && dispatch.createdAt < nextMonthStart,
     );
 
     const categoriesStrategic = Array.from(expectedByCategoryMap.values()).sort(
@@ -328,10 +353,12 @@ export class DashboardService {
             count,
           }),
         ),
-        byGrade: Array.from(membersByGradeMap.entries()).map(([grade, count]) => ({
-          grade,
-          count,
-        })),
+        byGrade: Array.from(membersByGradeMap.entries()).map(
+          ([grade, count]) => ({
+            grade,
+            count,
+          }),
+        ),
         activeMembers: activeMembers.length,
         inactiveMembers: inactiveMembers.length,
         averageAge: ageCount > 0 ? ageSum / ageCount : 0,
@@ -359,7 +386,9 @@ export class DashboardService {
         debtors,
         debtorsCount: debtors.length,
         debtorsPercentage:
-          activeMembers.length > 0 ? (debtors.length / activeMembers.length) * 100 : 0,
+          activeMembers.length > 0
+            ? (debtors.length / activeMembers.length) * 100
+            : 0,
         totalDebtToDate,
         delinquencyIndex,
         averageMonthlyContribution,
@@ -374,21 +403,23 @@ export class DashboardService {
           activeContributionBase,
           collectionRisk:
             collectionEffectiveness >= 85
-              ? 'LOW'
+              ? "LOW"
               : collectionEffectiveness >= 65
-                ? 'MEDIUM'
-                : 'HIGH',
+                ? "MEDIUM"
+                : "HIGH",
           liquidityRisk:
             monthsOfCoverage === null
-              ? 'UNKNOWN'
+              ? "UNKNOWN"
               : monthsOfCoverage >= 3
-                ? 'LOW'
+                ? "LOW"
                 : monthsOfCoverage >= 1
-                  ? 'MEDIUM'
-                  : 'HIGH',
+                  ? "MEDIUM"
+                  : "HIGH",
           concentrationRisk:
             debtors.length > 0 && totalDebtToDate > 0
-              ? (debtors.slice(0, 5).reduce((sum, debtor) => sum + debtor.totalDebt, 0) /
+              ? (debtors
+                  .slice(0, 5)
+                  .reduce((sum, debtor) => sum + debtor.totalDebt, 0) /
                   totalDebtToDate) *
                 100
               : 0,
@@ -403,7 +434,9 @@ function startOfMonth(date: Date): Date {
 }
 
 function addMonths(date: Date, months: number): Date {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, 1));
+  return new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, 1),
+  );
 }
 
 function calculateAge(birthDate: Date, today: Date): number {
@@ -424,7 +457,7 @@ function overlaps(
   monthStart: Date,
   monthEnd: Date,
 ): boolean {
-  const effectiveTo = to ?? new Date('2999-12-31T00:00:00.000Z');
+  const effectiveTo = to ?? new Date("2999-12-31T00:00:00.000Z");
 
   return (
     from.getTime() < monthEnd.getTime() &&
@@ -472,7 +505,9 @@ function resolveCategoryForMonth(
   monthEnd: Date,
 ): MemberCategory | null {
   const overlapping = member.categoryHistory
-    .filter((item) => overlaps(item.effectiveFrom, item.effectiveTo, monthStart, monthEnd))
+    .filter((item) =>
+      overlaps(item.effectiveFrom, item.effectiveTo, monthStart, monthEnd),
+    )
     .sort((a, b) => b.effectiveFrom.getTime() - a.effectiveFrom.getTime());
 
   if (overlapping.length > 0) {
@@ -495,7 +530,7 @@ function buildMonthlyCashHistory(
     const date = addMonths(currentMonthStart, index - (monthsCount - 1));
     const year = date.getUTCFullYear();
     const month = date.getUTCMonth() + 1;
-    const period = `${year}-${String(month).padStart(2, '0')}`;
+    const period = `${year}-${String(month).padStart(2, "0")}`;
 
     return {
       period,
@@ -511,14 +546,14 @@ function buildMonthlyCashHistory(
   for (const transaction of transactions) {
     const year = transaction.occurredAt.getUTCFullYear();
     const month = transaction.occurredAt.getUTCMonth() + 1;
-    const period = `${year}-${String(month).padStart(2, '0')}`;
+    const period = `${year}-${String(month).padStart(2, "0")}`;
     const current = map.get(period);
 
     if (!current) {
       continue;
     }
 
-    if (transaction.direction === 'IN') {
+    if (transaction.direction === "IN") {
       current.income += Number(transaction.amount);
     } else {
       current.expense += Number(transaction.amount);
