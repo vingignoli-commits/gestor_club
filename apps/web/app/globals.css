@@ -64,3 +64,24 @@ td {
     min-width: 0;
   }
 }
+
+@font-face {
+  font-family: 'Delaqrus';
+  src: url('/fonts/delaqrus.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+.club-wordmark {
+  font-family: 'Delaqrus', Georgia, serif;
+  white-space: nowrap;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  font-size: clamp(0.9rem, 3.2vw, 1.35rem);
+  transform: scaleX(0.94);
+  transform-origin: left center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: clip;
+}
