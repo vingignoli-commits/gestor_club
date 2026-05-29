@@ -1,70 +1,24 @@
-import {
-  IsDateString,
-  IsEmail,
-  IsEnum,
-  IsOptional,
-  IsString,
-} from 'class-validator';
-import {
-  MemberCategoryEnum,
-  MemberGradeEnum,
-  MemberStatusEnum,
-} from './create-member.dto';
+import { MemberCategory, MemberStatus } from '@prisma/client';
 
 export class UpdateMemberDto {
-  @IsOptional()
-  @IsString()
   matricula?: string;
+  documentNumber?: string;
 
-  @IsOptional()
-  @IsString()
   firstName?: string;
-
-  @IsOptional()
-  @IsString()
   lastName?: string;
 
-  @IsOptional()
-  @IsEnum(MemberCategoryEnum)
-  category?: MemberCategoryEnum;
+  category?: MemberCategory;
+  status?: MemberStatus;
+  grade?: string | null;
 
-  @IsOptional()
-  @IsEnum(MemberStatusEnum)
-  status?: MemberStatusEnum;
-
-  @IsOptional()
-  @IsEnum(MemberGradeEnum)
-  grade?: MemberGradeEnum;
-
-  @IsOptional()
-  @IsString()
   phone?: string;
-
-  @IsOptional()
-  @IsEmail()
   email?: string;
-
-  @IsOptional()
-  @IsString()
   notes?: string;
 
-  @IsOptional()
-  @IsDateString()
+  joinedAt?: string;
   birthDate?: string;
 
-  @IsOptional()
-  @IsString()
-  documentNumber?: string;
-  
-  @IsOptional()
-  @IsDateString()
   initiationDate?: string;
-  
-  @IsOptional()
-  @IsDateString()
   fellowcraftDate?: string;
-  
-  @IsOptional()
-  @IsDateString()
-  masterDate?: string;  
+  masterDate?: string;
 }
