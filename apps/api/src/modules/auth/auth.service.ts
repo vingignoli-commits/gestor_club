@@ -3,15 +3,15 @@ import {
   Injectable,
   NotFoundException,
   UnauthorizedException,
-} from '@nestjs/common';
-import { PaymentStatus, UserRole } from '@prisma/client';
-import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
-import { PrismaService } from '../prisma/prisma.service';
-import { LoginDto } from './dto/login.dto';
+} from "@nestjs/common";
+import { PaymentStatus, UserRole } from "@prisma/client";
+import { createHmac, randomBytes, timingSafeEqual } from "crypto";
+import { PrismaService } from "../prisma/prisma.service";
+import { LoginDto } from "./dto/login.dto";
 import {
   buildCurrentRatesMap,
   buildDebtSnapshot,
-} from '../members/member-debt.utils';
+} from "../members/member-debt.utils";
 
 type AuthUser = {
   id: string;
@@ -50,32 +50,32 @@ type RecoverAdminDto = {
 };
 
 const ALL_PERMISSIONS = [
-  'dashboard:read',
-  'dashboard:full',
-  'members:read',
-  'members:write',
-  'profile:own',
-  'debt:own',
-  'debt:all',
-  'treasury:read',
-  'treasury:write',
-  'cash:read',
-  'cash:write',
-  'reports:read',
-  'messaging:read',
-  'messaging:write',
-  'audit:read',
-  'settings:read',
-  'settings:write',
+  "dashboard:read",
+  "dashboard:full",
+  "members:read",
+  "members:write",
+  "profile:own",
+  "debt:own",
+  "debt:all",
+  "treasury:read",
+  "treasury:write",
+  "cash:read",
+  "cash:write",
+  "reports:read",
+  "messaging:read",
+  "messaging:write",
+  "audit:read",
+  "settings:read",
+  "settings:write",
 ] as const;
 
 const ADMIN_PERMISSIONS = [...ALL_PERMISSIONS];
 
 const SOCIO_DEFAULT_PERMISSIONS = [
-  'dashboard:read',
-  'members:read',
-  'profile:own',
-  'debt:own',
+  "dashboard:read",
+  "members:read",
+  "profile:own",
+  "debt:own",
 ];
 
 @Injectable()
@@ -91,15 +91,15 @@ export class AuthService {
     });
 
     if (!user || !user.isActive) {
-      throw new UnauthorizedException('Usuario o contraseña incorrectos');
+      throw new UnauthorizedException("Usuario o contraseña incorrectos");
     }
 
     if (
-      user.passwordHash === 'TEMP_PASSWORD_CHANGE_REQUIRED' ||
-      user.passwordSalt === 'TEMP_PASSWORD_CHANGE_REQUIRED'
+      user.passwordHash === "TEMP_PASSWORD_CHANGE_REQUIRED" ||
+      user.passwordSalt === "TEMP_PASSWORD_CHANGE_REQUIRED"
     ) {
       throw new UnauthorizedException(
-        'El usuario requiere definir una contraseña antes de ingresar.',
+        "El usuario requiere definir una contraseña antes de ingresar.",
       );
     }
 
@@ -110,7 +110,7 @@ export class AuthService {
     );
 
     if (!validPassword) {
-      throw new UnauthorizedException('Usuario o contraseña incorrectos');
+      throw new UnauthorizedException("Usuario o contraseña incorrectos");
     }
 
     await this.prisma.user.update({
@@ -145,7 +145,7 @@ export class AuthService {
     });
 
     if (!user || !user.isActive) {
-      throw new UnauthorizedException('Sesión inválida.');
+      throw new UnauthorizedException("Sesión inválida.");
     }
 
     return this.publicUser(
@@ -171,12 +171,12 @@ export class AuthService {
     });
 
     if (!user || !user.isActive) {
-      throw new UnauthorizedException('Sesión inválida.');
+      throw new UnauthorizedException("Sesión inválida.");
     }
 
     if (!user.memberId) {
       throw new BadRequestException(
-        'Tu usuario todavía no está vinculado a un socio del Cuadro.',
+        "Tu usuario todavía no está vinculado a un socio del Cuadro.",
       );
     }
 
@@ -188,14 +188,14 @@ export class AuthService {
         include: {
           payments: {
             where: { status: PaymentStatus.REGISTERED },
-            orderBy: [{ periodYear: 'desc' }, { periodMonth: 'desc' }],
+            orderBy: [{ periodYear: "desc" }, { periodMonth: "desc" }],
             take: 12,
           },
           statusHistory: {
-            orderBy: { effectiveFrom: 'desc' },
+            orderBy: { effectiveFrom: "desc" },
           },
           categoryHistory: {
-            orderBy: { effectiveFrom: 'desc' },
+            orderBy: { effectiveFrom: "desc" },
           },
         },
       }),
@@ -204,12 +204,12 @@ export class AuthService {
           validFrom: { lte: today },
           OR: [{ validTo: null }, { validTo: { gt: today } }],
         },
-        orderBy: [{ category: 'asc' }, { validFrom: 'desc' }],
+        orderBy: [{ category: "asc" }, { validFrom: "desc" }],
       }),
     ]);
 
     if (!member) {
-      throw new NotFoundException('Socio vinculado no encontrado.');
+      throw new NotFoundException("Socio vinculado no encontrado.");
     }
 
     const currentRates = buildCurrentRatesMap(rates, today);
@@ -229,9 +229,13 @@ export class AuthService {
         phone: member.phone,
         email: member.email,
         notes: member.notes,
+        documentNumber: member.documentNumber,
         joinedAt: member.joinedAt,
+        initiationDate: member.initiationDate,
+        fellowcraftDate: member.fellowcraftDate,
+        masterDate: member.masterDate,
         birthDate: member.birthDate,
-        seniorityYears: this.calculateYears(member.joinedAt, today),
+        seniorityYears: this.calculateYears(member.initiationDate, today),
       },
       account: {
         currentRate,
@@ -258,18 +262,18 @@ export class AuthService {
     const recoveryKey = process.env.ADMIN_RECOVERY_KEY;
 
     if (!recoveryKey) {
-      throw new BadRequestException('ADMIN_RECOVERY_KEY no está configurada.');
+      throw new BadRequestException("ADMIN_RECOVERY_KEY no está configurada.");
     }
 
     if (dto.recoveryKey !== recoveryKey) {
-      throw new UnauthorizedException('Clave de recuperación inválida.');
+      throw new UnauthorizedException("Clave de recuperación inválida.");
     }
 
-    const password = (dto.password ?? dto.newPassword ?? '').trim();
+    const password = (dto.password ?? dto.newPassword ?? "").trim();
 
     if (!this.isStrongEnoughPassword(password)) {
       throw new BadRequestException(
-        'La contraseña debe tener al menos 8 caracteres.',
+        "La contraseña debe tener al menos 8 caracteres.",
       );
     }
 
@@ -280,7 +284,7 @@ export class AuthService {
     });
 
     if (!user || user.role !== UserRole.ADMIN) {
-      throw new NotFoundException('Administrador no encontrado.');
+      throw new NotFoundException("Administrador no encontrado.");
     }
 
     const passwordData = this.hashPassword(password);
@@ -311,7 +315,7 @@ export class AuthService {
 
   async listUsers() {
     const users = await this.prisma.user.findMany({
-      orderBy: [{ role: 'asc' }, { fullName: 'asc' }],
+      orderBy: [{ role: "asc" }, { fullName: "asc" }],
       include: {
         member: {
           select: {
@@ -342,7 +346,7 @@ export class AuthService {
 
   async listMembersForUserLinking() {
     return this.prisma.member.findMany({
-      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
       select: {
         id: true,
         matricula: true,
@@ -362,27 +366,31 @@ export class AuthService {
     const password = dto.password.trim();
 
     if (!email || !fullName) {
-      throw new BadRequestException('Email y nombre completo son obligatorios.');
+      throw new BadRequestException(
+        "Email y nombre completo son obligatorios.",
+      );
     }
 
     if (!this.isStrongEnoughPassword(password)) {
       throw new BadRequestException(
-        'La contraseña debe tener al menos 8 caracteres.',
+        "La contraseña debe tener al menos 8 caracteres.",
       );
     }
 
     if (![UserRole.ADMIN, UserRole.SOCIO].includes(dto.role)) {
-      throw new BadRequestException('Rol inválido.');
+      throw new BadRequestException("Rol inválido.");
     }
 
     if (dto.role === UserRole.SOCIO && !dto.memberId) {
-      throw new BadRequestException('El usuario socio debe estar vinculado a un H.·.');
+      throw new BadRequestException(
+        "El usuario socio debe estar vinculado a un H.·.",
+      );
     }
 
     const existing = await this.prisma.user.findUnique({ where: { email } });
 
     if (existing) {
-      throw new BadRequestException('Ya existe un usuario con ese email.');
+      throw new BadRequestException("Ya existe un usuario con ese email.");
     }
 
     if (dto.memberId) {
@@ -414,18 +422,21 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new NotFoundException('Usuario no encontrado.');
+      throw new NotFoundException("Usuario no encontrado.");
     }
 
     if (dto.role && ![UserRole.ADMIN, UserRole.SOCIO].includes(dto.role)) {
-      throw new BadRequestException('Rol inválido.');
+      throw new BadRequestException("Rol inválido.");
     }
 
     const nextRole = dto.role ?? user.role;
-    const nextMemberId = dto.memberId === undefined ? user.memberId : dto.memberId;
+    const nextMemberId =
+      dto.memberId === undefined ? user.memberId : dto.memberId;
 
     if (nextRole === UserRole.SOCIO && !nextMemberId) {
-      throw new BadRequestException('El usuario socio debe estar vinculado a un H.·.');
+      throw new BadRequestException(
+        "El usuario socio debe estar vinculado a un H.·.",
+      );
     }
 
     if (nextMemberId && nextMemberId !== user.memberId) {
@@ -454,7 +465,7 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { id } });
 
     if (!user) {
-      throw new NotFoundException('Usuario no encontrado.');
+      throw new NotFoundException("Usuario no encontrado.");
     }
 
     await this.replaceUserPermissions(id, permissions);
@@ -466,7 +477,7 @@ export class AuthService {
       where: {
         email: { not: null },
       },
-      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
       select: {
         id: true,
         firstName: true,
@@ -503,7 +514,7 @@ export class AuthService {
         continue;
       }
 
-      const passwordData = this.hashPassword('progreso');
+      const passwordData = this.hashPassword("progreso");
       const user = await this.prisma.user.create({
         data: {
           email,
@@ -525,7 +536,7 @@ export class AuthService {
       skippedWithoutEmail,
       skippedExistingEmail,
       skippedLinkedMember,
-      password: 'progreso',
+      password: "progreso",
     };
   }
 
@@ -533,14 +544,14 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { id } });
 
     if (!user) {
-      throw new NotFoundException('Usuario no encontrado.');
+      throw new NotFoundException("Usuario no encontrado.");
     }
 
     const password = dto.password.trim();
 
     if (!this.isStrongEnoughPassword(password)) {
       throw new BadRequestException(
-        'La contraseña debe tener al menos 8 caracteres.',
+        "La contraseña debe tener al menos 8 caracteres.",
       );
     }
 
@@ -560,28 +571,28 @@ export class AuthService {
 
   verifyToken(token: string) {
     const secret = this.getTokenSecret();
-    const [payloadEncoded, signature] = token.split('.');
+    const [payloadEncoded, signature] = token.split(".");
 
     if (!payloadEncoded || !signature) {
-      throw new UnauthorizedException('Token inválido.');
+      throw new UnauthorizedException("Token inválido.");
     }
 
-    const expectedSignature = createHmac('sha256', secret)
+    const expectedSignature = createHmac("sha256", secret)
       .update(payloadEncoded)
-      .digest('base64url');
+      .digest("base64url");
 
     const valid = this.safeCompare(signature, expectedSignature);
 
     if (!valid) {
-      throw new UnauthorizedException('Token inválido.');
+      throw new UnauthorizedException("Token inválido.");
     }
 
     const payload = JSON.parse(
-      Buffer.from(payloadEncoded, 'base64url').toString('utf8'),
+      Buffer.from(payloadEncoded, "base64url").toString("utf8"),
     ) as AuthUser & { exp: number };
 
     if (payload.exp < Date.now()) {
-      throw new UnauthorizedException('Sesión vencida.');
+      throw new UnauthorizedException("Sesión vencida.");
     }
 
     return {
@@ -593,11 +604,16 @@ export class AuthService {
     };
   }
 
-  private async ensureMemberCanBeLinked(memberId: string, currentUserId?: string) {
-    const member = await this.prisma.member.findUnique({ where: { id: memberId } });
+  private async ensureMemberCanBeLinked(
+    memberId: string,
+    currentUserId?: string,
+  ) {
+    const member = await this.prisma.member.findUnique({
+      where: { id: memberId },
+    });
 
     if (!member) {
-      throw new NotFoundException('H.·. vinculado no encontrado.');
+      throw new NotFoundException("H.·. vinculado no encontrado.");
     }
 
     const existingUser = await this.prisma.user.findUnique({
@@ -605,7 +621,9 @@ export class AuthService {
     });
 
     if (existingUser && existingUser.id !== currentUserId) {
-      throw new BadRequestException('Este H.·. ya está vinculado a otro usuario.');
+      throw new BadRequestException(
+        "Este H.·. ya está vinculado a otro usuario.",
+      );
     }
   }
 
@@ -625,7 +643,7 @@ export class AuthService {
       },
     });
 
-    if (!user) throw new NotFoundException('Usuario no encontrado.');
+    if (!user) throw new NotFoundException("Usuario no encontrado.");
 
     return {
       id: user.id,
@@ -678,7 +696,9 @@ export class AuthService {
   private async replaceUserPermissions(userId: string, permissions: string[]) {
     const cleanPermissions = new Set(
       permissions.filter((permission) =>
-        ALL_PERMISSIONS.includes(permission as (typeof ALL_PERMISSIONS)[number]),
+        ALL_PERMISSIONS.includes(
+          permission as (typeof ALL_PERMISSIONS)[number],
+        ),
       ),
     );
 
@@ -708,13 +728,13 @@ export class AuthService {
 
   private extractBearerToken(authorization?: string) {
     if (!authorization) {
-      throw new UnauthorizedException('Falta token de sesión.');
+      throw new UnauthorizedException("Falta token de sesión.");
     }
 
-    const [type, token] = authorization.split(' ');
+    const [type, token] = authorization.split(" ");
 
-    if (type !== 'Bearer' || !token) {
-      throw new UnauthorizedException('Token de sesión inválido.');
+    if (type !== "Bearer" || !token) {
+      throw new UnauthorizedException("Token de sesión inválido.");
     }
 
     return token;
@@ -728,12 +748,12 @@ export class AuthService {
     };
 
     const payloadEncoded = Buffer.from(JSON.stringify(payload)).toString(
-      'base64url',
+      "base64url",
     );
 
-    const signature = createHmac('sha256', secret)
+    const signature = createHmac("sha256", secret)
       .update(payloadEncoded)
-      .digest('base64url');
+      .digest("base64url");
 
     return `${payloadEncoded}.${signature}`;
   }
@@ -742,21 +762,21 @@ export class AuthService {
     const secret = process.env.AUTH_TOKEN_SECRET;
 
     if (!secret) {
-      throw new BadRequestException('AUTH_TOKEN_SECRET no está configurada.');
+      throw new BadRequestException("AUTH_TOKEN_SECRET no está configurada.");
     }
 
     return secret;
   }
 
   private hashPassword(password: string) {
-    const salt = randomBytes(24).toString('hex');
-    const hash = createHmac('sha256', salt).update(password).digest('hex');
+    const salt = randomBytes(24).toString("hex");
+    const hash = createHmac("sha256", salt).update(password).digest("hex");
 
     return { salt, hash };
   }
 
   private verifyPassword(password: string, salt: string, expectedHash: string) {
-    const hash = createHmac('sha256', salt).update(password).digest('hex');
+    const hash = createHmac("sha256", salt).update(password).digest("hex");
     return this.safeCompare(hash, expectedHash);
   }
 
@@ -770,6 +790,6 @@ export class AuthService {
   }
 
   private isStrongEnoughPassword(password: string) {
-    return typeof password === 'string' && password.trim().length >= 8;
+    return typeof password === "string" && password.trim().length >= 8;
   }
 }
