@@ -1,14 +1,15 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useState } from 'react';
-import { SectionCard } from '../../components/section-card';
-import { useAuth } from '../../context/auth';
-import { api } from '../../lib/api';
-import { formatDateOnly } from '../../lib/date';
+import { useEffect, useMemo, useState } from "react";
+import { SectionCard } from "../../components/section-card";
+import { useAuth } from "../../context/auth";
+import { api } from "../../lib/api";
+import { formatDateOnly } from "../../lib/date";
 
 type Member = {
   id: string;
   matricula: string;
+  documentNumber: string | null;
   firstName: string;
   lastName: string;
   category: string;
@@ -18,6 +19,9 @@ type Member = {
   email: string | null;
   notes: string | null;
   joinedAt: string;
+  initiationDate: string;
+  fellowcraftDate: string | null;
+  masterDate: string | null;
   birthDate: string | null;
 };
 
@@ -52,6 +56,7 @@ type MemberFull = Member & {
 
 type MemberForm = {
   matricula: string;
+  documentNumber: string;
   firstName: string;
   lastName: string;
   category: string;
@@ -61,25 +66,29 @@ type MemberForm = {
   email: string;
   notes: string;
   joinedAt: string;
+  initiationDate: string;
+  fellowcraftDate: string;
+  masterDate: string;
   birthDate: string;
 };
 
 type SortField =
-  | 'matricula'
-  | 'firstName'
-  | 'lastName'
-  | 'category'
-  | 'status'
-  | 'grade'
-  | 'phone'
-  | 'email'
-  | 'joinedAt'
-  | 'birthDate';
+  | "matricula"
+  | "firstName"
+  | "lastName"
+  | "category"
+  | "status"
+  | "grade"
+  | "phone"
+  | "email"
+  | "joinedAt"
+  | "birthDate";
 
-type SortDirection = 'asc' | 'desc';
+type SortDirection = "asc" | "desc";
 
 type Filters = {
   matricula: string;
+  documentNumber: string;
   firstName: string;
   lastName: string;
   category: string;
@@ -90,71 +99,80 @@ type Filters = {
 };
 
 const CATEGORY_OPTIONS = [
-  { value: 'SIMPLE', label: 'Simple' },
-  { value: 'DOBLE', label: 'Doble' },
-  { value: 'ESTUDIANTE', label: 'Estudiante' },
-  { value: 'SOCIAL', label: 'Social' },
-  { value: 'MENOR', label: 'Menor' },
-  { value: 'HONOR', label: 'Honor' },
+  { value: "SIMPLE", label: "Simple" },
+  { value: "DOBLE", label: "Doble" },
+  { value: "ESTUDIANTE", label: "Estudiante" },
+  { value: "SOCIAL", label: "Social" },
+  { value: "MENOR", label: "Menor" },
+  { value: "HONOR", label: "Honor" },
 ];
 
 const STATUS_OPTIONS = [
-  { value: 'ACTIVE', label: 'Activo' },
-  { value: 'INACTIVE', label: 'Inactivo' },
+  { value: "ACTIVE", label: "Activo" },
+  { value: "INACTIVE", label: "Inactivo" },
 ];
 
 const GRADE_OPTIONS = [
-  { value: 'APRENDIZ', label: 'Aprendiz' },
-  { value: 'COMPANERO', label: 'Compañero' },
-  { value: 'MAESTRO', label: 'Maestro' },
+  { value: "APRENDIZ", label: "Aprendiz" },
+  { value: "COMPANERO", label: "Compañero" },
+  { value: "MAESTRO", label: "Maestro" },
 ];
 
 function emptyForm(): MemberForm {
   return {
-    matricula: '',
-    firstName: '',
-    lastName: '',
-    category: 'SIMPLE',
-    status: 'ACTIVE',
-    grade: 'APRENDIZ',
-    phone: '',
-    email: '',
-    notes: '',
-    joinedAt: new Date().toISOString().split('T')[0],
-    birthDate: '',
+    matricula: "",
+    documentNumber: "",
+    firstName: "",
+    lastName: "",
+    category: "SIMPLE",
+    status: "ACTIVE",
+    grade: "APRENDIZ",
+    phone: "",
+    email: "",
+    notes: "",
+    joinedAt: new Date().toISOString().split("T")[0],
+    initiationDate: new Date().toISOString().split("T")[0],
+    fellowcraftDate: "",
+    masterDate: "",
+    birthDate: "",
   };
 }
 
 function emptyFilters(): Filters {
   return {
-    matricula: '',
-    firstName: '',
-    lastName: '',
-    category: '',
-    status: '',
-    grade: '',
-    phone: '',
-    email: '',
+    matricula: "",
+    documentNumber: "",
+    firstName: "",
+    lastName: "",
+    category: "",
+    status: "",
+    grade: "",
+    phone: "",
+    email: "",
   };
 }
 
 function categoryLabel(value: string) {
-  return CATEGORY_OPTIONS.find((option) => option.value === value)?.label ?? value;
+  return (
+    CATEGORY_OPTIONS.find((option) => option.value === value)?.label ?? value
+  );
 }
 
 function statusLabel(value: string) {
-  return STATUS_OPTIONS.find((option) => option.value === value)?.label ?? value;
+  return (
+    STATUS_OPTIONS.find((option) => option.value === value)?.label ?? value
+  );
 }
 
 function gradeLabel(value: string | null) {
-  if (!value) return '-';
+  if (!value) return "-";
   return GRADE_OPTIONS.find((option) => option.value === value)?.label ?? value;
 }
 
 function fmtMoney(value: number | string) {
-  return new Intl.NumberFormat('es-AR', {
-    style: 'currency',
-    currency: 'ARS',
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
     maximumFractionDigits: 0,
   }).format(Number(value));
 }
@@ -162,30 +180,33 @@ function fmtMoney(value: number | string) {
 function buildWhatsappLink(member: Member) {
   if (!member.phone) return null;
 
-  const celular = member.phone.replace(/\D/g, '');
+  const celular = member.phone.replace(/\D/g, "");
   if (!celular) return null;
 
-  const saludo = member.grade === 'MAESTRO' ? 'Hola V.·.H.·.' : 'Hola Q.·.H.·.';
+  const saludo = member.grade === "MAESTRO" ? "Hola V.·.H.·." : "Hola Q.·.H.·.";
   const texto = `${saludo} ${member.firstName}`;
   return `https://wa.me/${celular}?text=${encodeURIComponent(texto)}`;
 }
 
 function normalizeText(value: string | null | undefined) {
-  return (value ?? '').trim().toLowerCase();
+  return (value ?? "").trim().toLowerCase();
 }
 
 function compareValues(a: string, b: string, direction: SortDirection) {
-  const result = a.localeCompare(b, 'es', { numeric: true, sensitivity: 'base' });
-  return direction === 'asc' ? result : -result;
+  const result = a.localeCompare(b, "es", {
+    numeric: true,
+    sensitivity: "base",
+  });
+  return direction === "asc" ? result : -result;
 }
 
 function escapeHtml(value: string | number | null | undefined) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function memberFullName(member: Member) {
@@ -195,6 +216,7 @@ function memberFullName(member: Member) {
 function memberSearchText(member: Member) {
   return [
     member.matricula,
+    member.documentNumber,
     member.firstName,
     member.lastName,
     categoryLabel(member.category),
@@ -205,23 +227,29 @@ function memberSearchText(member: Member) {
     member.notes,
     formatDateOnly(member.birthDate),
     formatDateOnly(member.joinedAt),
+    formatDateOnly(member.initiationDate),
+    formatDateOnly(member.fellowcraftDate),
+    formatDateOnly(member.masterDate),
   ]
-    .join(' ')
+    .join(" ")
     .toLowerCase();
 }
 
-function badgeClass(kind: 'category' | 'status' | 'grade', value: string | null) {
-  if (kind === 'status') {
-    return value === 'ACTIVE'
-      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-      : 'border-slate-200 bg-slate-50 text-slate-700';
+function badgeClass(
+  kind: "category" | "status" | "grade",
+  value: string | null,
+) {
+  if (kind === "status") {
+    return value === "ACTIVE"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : "border-slate-200 bg-slate-50 text-slate-700";
   }
 
-  if (kind === 'category' && value === 'HONOR') {
-    return 'border-amber-200 bg-amber-50 text-amber-700';
+  if (kind === "category" && value === "HONOR") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
   }
 
-  return 'border-ink/10 bg-ink/5 text-ink/70';
+  return "border-ink/10 bg-ink/5 text-ink/70";
 }
 
 export default function MembersPage() {
@@ -234,17 +262,19 @@ export default function MembersPage() {
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
   const [form, setForm] = useState<MemberForm>(emptyForm());
 
-  const [selectedProfile, setSelectedProfile] = useState<MemberFull | null>(null);
+  const [selectedProfile, setSelectedProfile] = useState<MemberFull | null>(
+    null,
+  );
   const [loadingProfile, setLoadingProfile] = useState(false);
 
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [globalSearch, setGlobalSearch] = useState('');
+  const [globalSearch, setGlobalSearch] = useState("");
   const [filters, setFilters] = useState<Filters>(emptyFilters());
-  const [sortField, setSortField] = useState<SortField>('lastName');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [sortField, setSortField] = useState<SortField>("lastName");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
   const isEditing = useMemo(() => editingMemberId !== null, [editingMemberId]);
 
@@ -252,7 +282,7 @@ export default function MembersPage() {
     setLoading(true);
 
     try {
-      const data = await api.get<Member[]>('/members');
+      const data = await api.get<Member[]>("/members");
       setMembers(data);
     } finally {
       setLoading(false);
@@ -267,7 +297,7 @@ export default function MembersPage() {
     if (!canEdit) return;
     setEditingMemberId(null);
     setForm(emptyForm());
-    setError('');
+    setError("");
     setShowForm(true);
   }
 
@@ -276,18 +306,22 @@ export default function MembersPage() {
     setEditingMemberId(member.id);
     setForm({
       matricula: member.matricula,
+      documentNumber: member.documentNumber ?? "",
       firstName: member.firstName,
       lastName: member.lastName,
       category: member.category,
       status: member.status,
-      grade: member.grade ?? 'APRENDIZ',
-      phone: member.phone ?? '',
-      email: member.email ?? '',
-      notes: member.notes ?? '',
-      joinedAt: member.joinedAt.split('T')[0],
-      birthDate: member.birthDate ? member.birthDate.split('T')[0] : '',
+      grade: member.grade ?? "APRENDIZ",
+      phone: member.phone ?? "",
+      email: member.email ?? "",
+      notes: member.notes ?? "",
+      joinedAt: member.joinedAt.split("T")[0],
+      initiationDate: member.initiationDate?.split("T")[0] ?? "",
+      fellowcraftDate: member.fellowcraftDate?.split("T")[0] ?? "",
+      masterDate: member.masterDate?.split("T")[0] ?? "",
+      birthDate: member.birthDate ? member.birthDate.split("T")[0] : "",
     });
-    setError('');
+    setError("");
     setShowForm(true);
   }
 
@@ -307,7 +341,7 @@ export default function MembersPage() {
     setShowForm(false);
     setEditingMemberId(null);
     setForm(emptyForm());
-    setError('');
+    setError("");
   }
 
   function closeProfile() {
@@ -317,12 +351,12 @@ export default function MembersPage() {
 
   function toggleSort(field: SortField) {
     if (sortField === field) {
-      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
       return;
     }
 
     setSortField(field);
-    setSortDirection('asc');
+    setSortDirection("asc");
   }
 
   function setFilter<K extends keyof Filters>(key: K, value: Filters[K]) {
@@ -334,20 +368,21 @@ export default function MembersPage() {
 
   function clearFilters() {
     setFilters(emptyFilters());
-    setGlobalSearch('');
+    setGlobalSearch("");
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canEdit) return;
 
-    setError('');
+    setError("");
     setSaving(true);
 
     try {
       if (isEditing && editingMemberId) {
         await api.patch(`/members/${editingMemberId}`, {
           matricula: form.matricula.trim(),
+          documentNumber: form.documentNumber.trim() || undefined,
           firstName: form.firstName.trim(),
           lastName: form.lastName.trim(),
           category: form.category,
@@ -356,11 +391,15 @@ export default function MembersPage() {
           phone: form.phone.trim() || undefined,
           email: form.email.trim() || undefined,
           notes: form.notes.trim() || undefined,
+          initiationDate: form.initiationDate,
+          fellowcraftDate: form.fellowcraftDate || undefined,
+          masterDate: form.masterDate || undefined,
           birthDate: form.birthDate || undefined,
         });
       } else {
-        await api.post('/members', {
+        await api.post("/members", {
           matricula: form.matricula.trim(),
+          documentNumber: form.documentNumber.trim() || undefined,
           firstName: form.firstName.trim(),
           lastName: form.lastName.trim(),
           category: form.category,
@@ -370,6 +409,9 @@ export default function MembersPage() {
           email: form.email.trim() || undefined,
           notes: form.notes.trim() || undefined,
           joinedAt: new Date(form.joinedAt).toISOString(),
+          initiationDate: form.initiationDate,
+          fellowcraftDate: form.fellowcraftDate || undefined,
+          masterDate: form.masterDate || undefined,
           birthDate: form.birthDate || undefined,
         });
       }
@@ -377,7 +419,7 @@ export default function MembersPage() {
       closeForm();
       await load();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Error al guardar H.·.');
+      setError(err instanceof Error ? err.message : "Error al guardar H.·.");
     } finally {
       setSaving(false);
     }
@@ -391,58 +433,86 @@ export default function MembersPage() {
 
       if (
         filters.matricula &&
-        !normalizeText(member.matricula).includes(normalizeText(filters.matricula))
-      ) return false;
+        !normalizeText(member.matricula).includes(
+          normalizeText(filters.matricula),
+        )
+      )
+        return false;
 
       if (
         filters.firstName &&
-        !normalizeText(member.firstName).includes(normalizeText(filters.firstName))
-      ) return false;
+        !normalizeText(member.firstName).includes(
+          normalizeText(filters.firstName),
+        )
+      )
+        return false;
 
       if (
         filters.lastName &&
-        !normalizeText(member.lastName).includes(normalizeText(filters.lastName))
-      ) return false;
+        !normalizeText(member.lastName).includes(
+          normalizeText(filters.lastName),
+        )
+      )
+        return false;
 
-      if (filters.category && member.category !== filters.category) return false;
+      if (filters.category && member.category !== filters.category)
+        return false;
       if (filters.status && member.status !== filters.status) return false;
-      if (filters.grade && (member.grade ?? '') !== filters.grade) return false;
+      if (filters.grade && (member.grade ?? "") !== filters.grade) return false;
 
       if (
         filters.phone &&
         !normalizeText(member.phone).includes(normalizeText(filters.phone))
-      ) return false;
+      )
+        return false;
 
       if (
         filters.email &&
         !normalizeText(member.email).includes(normalizeText(filters.email))
-      ) return false;
+      )
+        return false;
 
       return true;
     });
 
     return result.sort((a, b) => {
       switch (sortField) {
-        case 'matricula':
+        case "matricula":
           return compareValues(a.matricula, b.matricula, sortDirection);
-        case 'firstName':
+        case "firstName":
           return compareValues(a.firstName, b.firstName, sortDirection);
-        case 'lastName':
+        case "lastName":
           return compareValues(a.lastName, b.lastName, sortDirection);
-        case 'category':
-          return compareValues(categoryLabel(a.category), categoryLabel(b.category), sortDirection);
-        case 'status':
-          return compareValues(statusLabel(a.status), statusLabel(b.status), sortDirection);
-        case 'grade':
-          return compareValues(gradeLabel(a.grade), gradeLabel(b.grade), sortDirection);
-        case 'phone':
-          return compareValues(a.phone ?? '', b.phone ?? '', sortDirection);
-        case 'email':
-          return compareValues(a.email ?? '', b.email ?? '', sortDirection);
-        case 'joinedAt':
+        case "category":
+          return compareValues(
+            categoryLabel(a.category),
+            categoryLabel(b.category),
+            sortDirection,
+          );
+        case "status":
+          return compareValues(
+            statusLabel(a.status),
+            statusLabel(b.status),
+            sortDirection,
+          );
+        case "grade":
+          return compareValues(
+            gradeLabel(a.grade),
+            gradeLabel(b.grade),
+            sortDirection,
+          );
+        case "phone":
+          return compareValues(a.phone ?? "", b.phone ?? "", sortDirection);
+        case "email":
+          return compareValues(a.email ?? "", b.email ?? "", sortDirection);
+        case "joinedAt":
           return compareValues(a.joinedAt, b.joinedAt, sortDirection);
-        case 'birthDate':
-          return compareValues(a.birthDate ?? '', b.birthDate ?? '', sortDirection);
+        case "birthDate":
+          return compareValues(
+            a.birthDate ?? "",
+            b.birthDate ?? "",
+            sortDirection,
+          );
         default:
           return 0;
       }
@@ -456,7 +526,8 @@ export default function MembersPage() {
     if (filters.matricula) items.push(`Matrícula: ${filters.matricula}`);
     if (filters.firstName) items.push(`Nombre: ${filters.firstName}`);
     if (filters.lastName) items.push(`Apellido: ${filters.lastName}`);
-    if (filters.category) items.push(`Categoría: ${categoryLabel(filters.category)}`);
+    if (filters.category)
+      items.push(`Categoría: ${categoryLabel(filters.category)}`);
     if (filters.status) items.push(`Estado: ${statusLabel(filters.status)}`);
     if (filters.grade) items.push(`Grado: ${gradeLabel(filters.grade)}`);
     if (filters.phone) items.push(`Celular: ${filters.phone}`);
@@ -465,57 +536,69 @@ export default function MembersPage() {
     return items;
   }, [filters, globalSearch]);
 
-  const activos = members.filter((m) => m.status === 'ACTIVE').length;
-  const inactivos = members.filter((m) => m.status === 'INACTIVE').length;
+  const activos = members.filter((m) => m.status === "ACTIVE").length;
+  const inactivos = members.filter((m) => m.status === "INACTIVE").length;
 
   function sortIndicator(field: SortField) {
-    if (sortField !== field) return '↕';
-    return sortDirection === 'asc' ? '↑' : '↓';
+    if (sortField !== field) return "↕";
+    return sortDirection === "asc" ? "↑" : "↓";
   }
 
   function exportExcel() {
     const rows = filteredMembers.map((member) => ({
       Matrícula: member.matricula,
+      Documento: member.documentNumber ?? "",
       Apellido: member.lastName,
       Nombre: member.firstName,
       Categoría: categoryLabel(member.category),
       Grado: gradeLabel(member.grade),
-      Celular: member.phone ?? '',
-      Email: member.email ?? '',
+      Celular: member.phone ?? "",
+      Email: member.email ?? "",
       Estado: statusLabel(member.status),
       Alta: formatDateOnly(member.joinedAt),
+      Iniciación: formatDateOnly(member.initiationDate),
+      Compañero: formatDateOnly(member.fellowcraftDate),
+      Maestro: formatDateOnly(member.masterDate),
       Nacimiento: formatDateOnly(member.birthDate),
-      Notas: member.notes ?? '',
+      Notas: member.notes ?? "",
     }));
 
-    const header = Object.keys(rows[0] ?? {
-      Matrícula: '',
-      Apellido: '',
-      Nombre: '',
-      Categoría: '',
-      Grado: '',
-      Celular: '',
-      Email: '',
-      Estado: '',
-      Alta: '',
-      Nacimiento: '',
-      Notas: '',
-    });
+    const header = Object.keys(
+      rows[0] ?? {
+        Matrícula: "",
+        Apellido: "",
+        Nombre: "",
+        Categoría: "",
+        Grado: "",
+        Celular: "",
+        Email: "",
+        Estado: "",
+        Alta: "",
+        Iniciación: "",
+        Compañero: "",
+        Maestro: "",
+        Nacimiento: "",
+        Notas: "",
+      },
+    );
 
     const csv = [
-      header.join(';'),
+      header.join(";"),
       ...rows.map((row) =>
         header
-          .map((key) => `"${String(row[key as keyof typeof row] ?? '').replaceAll('"', '""')}"`)
-          .join(';'),
+          .map(
+            (key) =>
+              `"${String(row[key as keyof typeof row] ?? "").replaceAll('"', '""')}"`,
+          )
+          .join(";"),
       ),
-    ].join('\n');
+    ].join("\n");
 
     const blob = new Blob([`\uFEFF${csv}`], {
-      type: 'text/csv;charset=utf-8;',
+      type: "text/csv;charset=utf-8;",
     });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
+    const link = document.createElement("a");
 
     link.href = url;
     link.download = `cuadro-del-taller-${new Date().toISOString().slice(0, 10)}.csv`;
@@ -525,7 +608,7 @@ export default function MembersPage() {
   }
 
   function exportPdf() {
-    const emittedAt = new Date().toLocaleString('es-AR');
+    const emittedAt = new Date().toLocaleString("es-AR");
 
     const rows = filteredMembers
       .map(
@@ -535,17 +618,19 @@ export default function MembersPage() {
             <td>${escapeHtml(member.lastName)}, ${escapeHtml(member.firstName)}</td>
             <td>${escapeHtml(categoryLabel(member.category))}</td>
             <td>${escapeHtml(gradeLabel(member.grade))}</td>
-            <td>${escapeHtml(member.phone ?? '-')}</td>
-            <td>${escapeHtml(member.email ?? '-')}</td>
+            <td>${escapeHtml(member.phone ?? "-")}</td>
+            <td>${escapeHtml(member.email ?? "-")}</td>
             <td>${escapeHtml(statusLabel(member.status))}</td>
             <td>${escapeHtml(formatDateOnly(member.birthDate))}</td>
           </tr>
         `,
       )
-      .join('');
+      .join("");
 
     const filtersText =
-      activeFilters.length > 0 ? activeFilters.join(' · ') : 'Sin filtros aplicados';
+      activeFilters.length > 0
+        ? activeFilters.join(" · ")
+        : "Sin filtros aplicados";
 
     const html = `
       <!doctype html>
@@ -694,7 +779,7 @@ export default function MembersPage() {
       </html>
     `;
 
-    const printWindow = window.open('', '_blank');
+    const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
     printWindow.document.open();
@@ -715,20 +800,32 @@ export default function MembersPage() {
       >
         <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
-            <div className="text-xs uppercase tracking-wide text-ink/50">Total</div>
-            <div className="mt-2 text-2xl font-bold text-ink">{members.length}</div>
+            <div className="text-xs uppercase tracking-wide text-ink/50">
+              Total
+            </div>
+            <div className="mt-2 text-2xl font-bold text-ink">
+              {members.length}
+            </div>
           </div>
           <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
-            <div className="text-xs uppercase tracking-wide text-ink/50">Activos</div>
+            <div className="text-xs uppercase tracking-wide text-ink/50">
+              Activos
+            </div>
             <div className="mt-2 text-2xl font-bold text-ink">{activos}</div>
           </div>
           <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
-            <div className="text-xs uppercase tracking-wide text-ink/50">Inactivos</div>
+            <div className="text-xs uppercase tracking-wide text-ink/50">
+              Inactivos
+            </div>
             <div className="mt-2 text-2xl font-bold text-ink">{inactivos}</div>
           </div>
           <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
-            <div className="text-xs uppercase tracking-wide text-ink/50">Mostrando</div>
-            <div className="mt-2 text-2xl font-bold text-ink">{filteredMembers.length}</div>
+            <div className="text-xs uppercase tracking-wide text-ink/50">
+              Mostrando
+            </div>
+            <div className="mt-2 text-2xl font-bold text-ink">
+              {filteredMembers.length}
+            </div>
           </div>
         </div>
 
@@ -746,7 +843,7 @@ export default function MembersPage() {
               onClick={() => setShowAdvancedFilters((prev) => !prev)}
               className="rounded-2xl border border-ink/10 px-4 py-3 text-sm font-semibold text-ink/80 sm:px-5"
             >
-              {showAdvancedFilters ? 'Ocultar filtros' : 'Filtros'}
+              {showAdvancedFilters ? "Ocultar filtros" : "Filtros"}
             </button>
             <button
               type="button"
@@ -776,41 +873,43 @@ export default function MembersPage() {
 
         {showAdvancedFilters && (
           <div className="mb-6 rounded-3xl border border-ink/10 bg-white p-4">
-            <div className="mb-4 text-sm font-semibold text-ink">Filtros avanzados</div>
+            <div className="mb-4 text-sm font-semibold text-ink">
+              Filtros avanzados
+            </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <input
                 value={filters.matricula}
-                onChange={(e) => setFilter('matricula', e.target.value)}
+                onChange={(e) => setFilter("matricula", e.target.value)}
                 placeholder="Matrícula"
                 className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
               />
               <input
                 value={filters.lastName}
-                onChange={(e) => setFilter('lastName', e.target.value)}
+                onChange={(e) => setFilter("lastName", e.target.value)}
                 placeholder="Apellido"
                 className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
               />
               <input
                 value={filters.firstName}
-                onChange={(e) => setFilter('firstName', e.target.value)}
+                onChange={(e) => setFilter("firstName", e.target.value)}
                 placeholder="Nombre"
                 className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
               />
               <input
                 value={filters.phone}
-                onChange={(e) => setFilter('phone', e.target.value)}
+                onChange={(e) => setFilter("phone", e.target.value)}
                 placeholder="Celular"
                 className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
               />
               <input
                 value={filters.email}
-                onChange={(e) => setFilter('email', e.target.value)}
+                onChange={(e) => setFilter("email", e.target.value)}
                 placeholder="Email"
                 className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
               />
               <select
                 value={filters.category}
-                onChange={(e) => setFilter('category', e.target.value)}
+                onChange={(e) => setFilter("category", e.target.value)}
                 className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
               >
                 <option value="">Todas las categorías</option>
@@ -822,7 +921,7 @@ export default function MembersPage() {
               </select>
               <select
                 value={filters.grade}
-                onChange={(e) => setFilter('grade', e.target.value)}
+                onChange={(e) => setFilter("grade", e.target.value)}
                 className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
               >
                 <option value="">Todos los grados</option>
@@ -834,7 +933,7 @@ export default function MembersPage() {
               </select>
               <select
                 value={filters.status}
-                onChange={(e) => setFilter('status', e.target.value)}
+                onChange={(e) => setFilter("status", e.target.value)}
                 className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
               >
                 <option value="">Todos los estados</option>
@@ -850,8 +949,8 @@ export default function MembersPage() {
 
         {activeFilters.length > 0 && (
           <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            <span className="font-semibold">Filtros aplicados:</span>{' '}
-            {activeFilters.join(' · ')}
+            <span className="font-semibold">Filtros aplicados:</span>{" "}
+            {activeFilters.join(" · ")}
             <button
               type="button"
               onClick={clearFilters}
@@ -863,7 +962,9 @@ export default function MembersPage() {
         )}
 
         {loading ? (
-          <div className="py-8 text-sm text-ink/60">Cargando Cuadro del Taller...</div>
+          <div className="py-8 text-sm text-ink/60">
+            Cargando Cuadro del Taller...
+          </div>
         ) : filteredMembers.length === 0 ? (
           <div className="py-8 text-sm text-ink/60">
             No se encontraron HH.·. con los filtros actuales.
@@ -876,43 +977,75 @@ export default function MembersPage() {
                   <thead>
                     <tr className="text-left text-xs uppercase tracking-wide text-ink/50">
                       <th className="px-3 py-2">
-                        <button type="button" onClick={() => toggleSort('matricula')} className="font-semibold">
-                          Matrícula {sortIndicator('matricula')}
+                        <button
+                          type="button"
+                          onClick={() => toggleSort("matricula")}
+                          className="font-semibold"
+                        >
+                          Matrícula {sortIndicator("matricula")}
                         </button>
                       </th>
                       <th className="px-3 py-2">
-                        <button type="button" onClick={() => toggleSort('lastName')} className="font-semibold">
-                          H.·. {sortIndicator('lastName')}
+                        <button
+                          type="button"
+                          onClick={() => toggleSort("lastName")}
+                          className="font-semibold"
+                        >
+                          H.·. {sortIndicator("lastName")}
                         </button>
                       </th>
                       <th className="px-3 py-2">
-                        <button type="button" onClick={() => toggleSort('category')} className="font-semibold">
-                          Categoría {sortIndicator('category')}
+                        <button
+                          type="button"
+                          onClick={() => toggleSort("category")}
+                          className="font-semibold"
+                        >
+                          Categoría {sortIndicator("category")}
                         </button>
                       </th>
                       <th className="px-3 py-2">
-                        <button type="button" onClick={() => toggleSort('grade')} className="font-semibold">
-                          Grado {sortIndicator('grade')}
+                        <button
+                          type="button"
+                          onClick={() => toggleSort("grade")}
+                          className="font-semibold"
+                        >
+                          Grado {sortIndicator("grade")}
                         </button>
                       </th>
                       <th className="px-3 py-2">
-                        <button type="button" onClick={() => toggleSort('phone')} className="font-semibold">
-                          Celular {sortIndicator('phone')}
+                        <button
+                          type="button"
+                          onClick={() => toggleSort("phone")}
+                          className="font-semibold"
+                        >
+                          Celular {sortIndicator("phone")}
                         </button>
                       </th>
                       <th className="px-3 py-2">
-                        <button type="button" onClick={() => toggleSort('email')} className="font-semibold">
-                          Email {sortIndicator('email')}
+                        <button
+                          type="button"
+                          onClick={() => toggleSort("email")}
+                          className="font-semibold"
+                        >
+                          Email {sortIndicator("email")}
                         </button>
                       </th>
                       <th className="px-3 py-2">
-                        <button type="button" onClick={() => toggleSort('status')} className="font-semibold">
-                          Estado {sortIndicator('status')}
+                        <button
+                          type="button"
+                          onClick={() => toggleSort("status")}
+                          className="font-semibold"
+                        >
+                          Estado {sortIndicator("status")}
                         </button>
                       </th>
                       <th className="px-3 py-2">
-                        <button type="button" onClick={() => toggleSort('birthDate')} className="font-semibold">
-                          Nacimiento {sortIndicator('birthDate')}
+                        <button
+                          type="button"
+                          onClick={() => toggleSort("birthDate")}
+                          className="font-semibold"
+                        >
+                          Nacimiento {sortIndicator("birthDate")}
                         </button>
                       </th>
                       <th className="px-3 py-2">Acciones</th>
@@ -931,8 +1064,12 @@ export default function MembersPage() {
                           <td className="px-3 py-3 text-ink">
                             {m.lastName}, {m.firstName}
                           </td>
-                          <td className="px-3 py-3 text-ink/80">{categoryLabel(m.category)}</td>
-                          <td className="px-3 py-3 text-ink/80">{gradeLabel(m.grade)}</td>
+                          <td className="px-3 py-3 text-ink/80">
+                            {categoryLabel(m.category)}
+                          </td>
+                          <td className="px-3 py-3 text-ink/80">
+                            {gradeLabel(m.grade)}
+                          </td>
                           <td className="px-3 py-3 text-ink/80">
                             {m.phone ? (
                               <a
@@ -945,12 +1082,18 @@ export default function MembersPage() {
                                 {m.phone}
                               </a>
                             ) : (
-                              '-'
+                              "-"
                             )}
                           </td>
-                          <td className="px-3 py-3 text-ink/80">{m.email ?? '-'}</td>
-                          <td className="px-3 py-3 text-ink/80">{statusLabel(m.status)}</td>
-                          <td className="px-3 py-3 text-ink/80">{formatDateOnly(m.birthDate)}</td>
+                          <td className="px-3 py-3 text-ink/80">
+                            {m.email ?? "-"}
+                          </td>
+                          <td className="px-3 py-3 text-ink/80">
+                            {statusLabel(m.status)}
+                          </td>
+                          <td className="px-3 py-3 text-ink/80">
+                            {formatDateOnly(m.birthDate)}
+                          </td>
                           <td className="rounded-r-2xl px-3 py-3">
                             <div className="flex flex-col gap-2">
                               <button
@@ -1001,10 +1144,14 @@ export default function MembersPage() {
                   </select>
                   <button
                     type="button"
-                    onClick={() => setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+                    onClick={() =>
+                      setSortDirection((prev) =>
+                        prev === "asc" ? "desc" : "asc",
+                      )
+                    }
                     className="rounded-xl border border-ink/10 px-3 py-2 text-xs font-semibold"
                   >
-                    {sortDirection === 'asc' ? '↑' : '↓'}
+                    {sortDirection === "asc" ? "↑" : "↓"}
                   </button>
                 </div>
               </div>
@@ -1026,16 +1173,22 @@ export default function MembersPage() {
                           {m.lastName}, {m.firstName}
                         </div>
                       </div>
-                      <span className={`shrink-0 rounded-xl border px-2 py-1 text-xs font-semibold ${badgeClass('status', m.status)}`}>
+                      <span
+                        className={`shrink-0 rounded-xl border px-2 py-1 text-xs font-semibold ${badgeClass("status", m.status)}`}
+                      >
                         {statusLabel(m.status)}
                       </span>
                     </div>
 
                     <div className="mt-4 flex flex-wrap gap-2">
-                      <span className={`rounded-xl border px-2 py-1 text-xs font-semibold ${badgeClass('category', m.category)}`}>
+                      <span
+                        className={`rounded-xl border px-2 py-1 text-xs font-semibold ${badgeClass("category", m.category)}`}
+                      >
                         {categoryLabel(m.category)}
                       </span>
-                      <span className={`rounded-xl border px-2 py-1 text-xs font-semibold ${badgeClass('grade', m.grade)}`}>
+                      <span
+                        className={`rounded-xl border px-2 py-1 text-xs font-semibold ${badgeClass("grade", m.grade)}`}
+                      >
                         {gradeLabel(m.grade)}
                       </span>
                       <span className="rounded-xl border border-ink/10 bg-ink/5 px-2 py-1 text-xs font-semibold text-ink/70">
@@ -1061,7 +1214,9 @@ export default function MembersPage() {
                       </div>
                       <div className="flex justify-between gap-3">
                         <span className="text-ink/50">Email</span>
-                        <span className="max-w-[65%] truncate text-right">{m.email ?? '-'}</span>
+                        <span className="max-w-[65%] truncate text-right">
+                          {m.email ?? "-"}
+                        </span>
                       </div>
                     </div>
 
@@ -1087,7 +1242,7 @@ export default function MembersPage() {
                           href={whatsappLink ?? undefined}
                           target="_blank"
                           rel="noreferrer"
-                          className={`rounded-2xl border px-4 py-3 text-center text-sm font-semibold ${m.phone ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'pointer-events-none border-slate-200 bg-slate-50 text-slate-500'}`}
+                          className={`rounded-2xl border px-4 py-3 text-center text-sm font-semibold ${m.phone ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "pointer-events-none border-slate-200 bg-slate-50 text-slate-500"}`}
                         >
                           WhatsApp
                         </a>
@@ -1118,7 +1273,8 @@ export default function MembersPage() {
                   Ficha completa del H.·.
                 </h2>
                 <p className="mt-1 text-sm text-ink/60">
-                  {memberFullName(selectedProfile)} · Matrícula {selectedProfile.matricula}
+                  {memberFullName(selectedProfile)} · Matrícula{" "}
+                  {selectedProfile.matricula}
                 </p>
               </div>
 
@@ -1139,17 +1295,60 @@ export default function MembersPage() {
                   </div>
 
                   <div className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-1">
-                    <div><strong>Nombre:</strong> {selectedProfile.firstName}</div>
-                    <div><strong>Apellido:</strong> {selectedProfile.lastName}</div>
-                    <div><strong>Matrícula:</strong> {selectedProfile.matricula}</div>
-                    <div><strong>Categoría:</strong> {categoryLabel(selectedProfile.category)}</div>
-                    <div><strong>Grado:</strong> {gradeLabel(selectedProfile.grade)}</div>
-                    <div><strong>Estado:</strong> {statusLabel(selectedProfile.status)}</div>
-                    <div><strong>Fecha de alta:</strong> {formatDateOnly(selectedProfile.joinedAt)}</div>
-                    <div><strong>Fecha de nacimiento:</strong> {formatDateOnly(selectedProfile.birthDate)}</div>
-                    <div><strong>Celular:</strong> {selectedProfile.phone ?? '-'}</div>
-                    <div><strong>Email:</strong> {selectedProfile.email ?? '-'}</div>
-                    <div className="sm:col-span-2 xl:col-span-1"><strong>Notas:</strong> {selectedProfile.notes ?? '-'}</div>
+                    <div>
+                      <strong>Nombre:</strong> {selectedProfile.firstName}
+                    </div>
+                    <div>
+                      <strong>Apellido:</strong> {selectedProfile.lastName}
+                    </div>
+                    <div>
+                      <strong>Matrícula:</strong> {selectedProfile.matricula}
+                    </div>
+                    <div>
+                      <strong>Documento:</strong>{" "}
+                      {selectedProfile.documentNumber ?? "-"}
+                    </div>
+                    <div>
+                      <strong>Categoría:</strong>{" "}
+                      {categoryLabel(selectedProfile.category)}
+                    </div>
+                    <div>
+                      <strong>Grado:</strong>{" "}
+                      {gradeLabel(selectedProfile.grade)}
+                    </div>
+                    <div>
+                      <strong>Estado:</strong>{" "}
+                      {statusLabel(selectedProfile.status)}
+                    </div>
+                    <div>
+                      <strong>Fecha de alta:</strong>{" "}
+                      {formatDateOnly(selectedProfile.joinedAt)}
+                    </div>
+                    <div>
+                      <strong>Fecha de iniciación:</strong>{" "}
+                      {formatDateOnly(selectedProfile.initiationDate)}
+                    </div>
+                    <div>
+                      <strong>Fecha de compañero:</strong>{" "}
+                      {formatDateOnly(selectedProfile.fellowcraftDate)}
+                    </div>
+                    <div>
+                      <strong>Fecha de maestro:</strong>{" "}
+                      {formatDateOnly(selectedProfile.masterDate)}
+                    </div>
+                    <div>
+                      <strong>Fecha de nacimiento:</strong>{" "}
+                      {formatDateOnly(selectedProfile.birthDate)}
+                    </div>
+                    <div>
+                      <strong>Celular:</strong> {selectedProfile.phone ?? "-"}
+                    </div>
+                    <div>
+                      <strong>Email:</strong> {selectedProfile.email ?? "-"}
+                    </div>
+                    <div className="sm:col-span-2 xl:col-span-1">
+                      <strong>Notas:</strong> {selectedProfile.notes ?? "-"}
+                    </div>
                   </div>
                 </div>
 
@@ -1174,10 +1373,13 @@ export default function MembersPage() {
                             Desde: {formatDateOnly(item.effectiveFrom)}
                           </div>
                           <div className="text-ink/70">
-                            Hasta: {item.effectiveTo ? formatDateOnly(item.effectiveTo) : 'Actual'}
+                            Hasta:{" "}
+                            {item.effectiveTo
+                              ? formatDateOnly(item.effectiveTo)
+                              : "Actual"}
                           </div>
                           <div className="text-xs text-ink/50">
-                            {item.reason ?? '-'}
+                            {item.reason ?? "-"}
                           </div>
                         </div>
                       ))}
@@ -1206,10 +1408,13 @@ export default function MembersPage() {
                             Desde: {formatDateOnly(item.effectiveFrom)}
                           </div>
                           <div className="text-ink/70">
-                            Hasta: {item.effectiveTo ? formatDateOnly(item.effectiveTo) : 'Actual'}
+                            Hasta:{" "}
+                            {item.effectiveTo
+                              ? formatDateOnly(item.effectiveTo)
+                              : "Actual"}
                           </div>
                           <div className="text-xs text-ink/50">
-                            {item.reason ?? '-'}
+                            {item.reason ?? "-"}
                           </div>
                         </div>
                       ))}
@@ -1225,7 +1430,9 @@ export default function MembersPage() {
                   </div>
 
                   {(selectedProfile.payments ?? []).length === 0 ? (
-                    <div className="text-sm text-ink/60">Sin pagos registrados.</div>
+                    <div className="text-sm text-ink/60">
+                      Sin pagos registrados.
+                    </div>
                   ) : (
                     <>
                       <div className="hidden overflow-x-auto sm:block">
@@ -1240,41 +1447,61 @@ export default function MembersPage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {(selectedProfile.payments ?? []).slice(0, 12).map((payment) => (
-                              <tr key={payment.id} className="rounded-2xl bg-ink/5 text-sm">
-                                <td className="rounded-l-2xl px-3 py-3">
-                                  {formatDateOnly(payment.paidAt)}
-                                </td>
-                                <td className="px-3 py-3">
-                                  {String(payment.periodMonth).padStart(2, '0')}/{payment.periodYear}
-                                </td>
-                                <td className="px-3 py-3 font-semibold">
-                                  {fmtMoney(payment.amount)}
-                                </td>
-                                <td className="px-3 py-3">{payment.methodCode}</td>
-                                <td className="rounded-r-2xl px-3 py-3">
-                                  {payment.status}
-                                </td>
-                              </tr>
-                            ))}
+                            {(selectedProfile.payments ?? [])
+                              .slice(0, 12)
+                              .map((payment) => (
+                                <tr
+                                  key={payment.id}
+                                  className="rounded-2xl bg-ink/5 text-sm"
+                                >
+                                  <td className="rounded-l-2xl px-3 py-3">
+                                    {formatDateOnly(payment.paidAt)}
+                                  </td>
+                                  <td className="px-3 py-3">
+                                    {String(payment.periodMonth).padStart(
+                                      2,
+                                      "0",
+                                    )}
+                                    /{payment.periodYear}
+                                  </td>
+                                  <td className="px-3 py-3 font-semibold">
+                                    {fmtMoney(payment.amount)}
+                                  </td>
+                                  <td className="px-3 py-3">
+                                    {payment.methodCode}
+                                  </td>
+                                  <td className="rounded-r-2xl px-3 py-3">
+                                    {payment.status}
+                                  </td>
+                                </tr>
+                              ))}
                           </tbody>
                         </table>
                       </div>
 
                       <div className="space-y-3 sm:hidden">
-                        {(selectedProfile.payments ?? []).slice(0, 12).map((payment) => (
-                          <div key={payment.id} className="rounded-2xl bg-ink/5 p-3 text-sm">
-                            <div className="flex justify-between gap-3">
-                              <span className="font-semibold text-ink">
-                                {String(payment.periodMonth).padStart(2, '0')}/{payment.periodYear}
-                              </span>
-                              <span className="font-bold text-ink">{fmtMoney(payment.amount)}</span>
+                        {(selectedProfile.payments ?? [])
+                          .slice(0, 12)
+                          .map((payment) => (
+                            <div
+                              key={payment.id}
+                              className="rounded-2xl bg-ink/5 p-3 text-sm"
+                            >
+                              <div className="flex justify-between gap-3">
+                                <span className="font-semibold text-ink">
+                                  {String(payment.periodMonth).padStart(2, "0")}
+                                  /{payment.periodYear}
+                                </span>
+                                <span className="font-bold text-ink">
+                                  {fmtMoney(payment.amount)}
+                                </span>
+                              </div>
+                              <div className="mt-2 text-xs text-ink/60">
+                                {formatDateOnly(payment.paidAt)} ·{" "}
+                                {payment.methodCode} · {payment.status}
+                              </div>
                             </div>
-                            <div className="mt-2 text-xs text-ink/60">
-                              {formatDateOnly(payment.paidAt)} · {payment.methodCode} · {payment.status}
-                            </div>
-                          </div>
-                        ))}
+                          ))}
                       </div>
                     </>
                   )}
@@ -1324,10 +1551,11 @@ export default function MembersPage() {
             <div className="mb-5 flex items-start justify-between gap-4 border-b border-ink/10 pb-4">
               <div className="min-w-0">
                 <h2 className="text-xl font-bold text-ink sm:text-2xl">
-                  {isEditing ? 'Editar H.·.' : 'Nuevo H.·.'}
+                  {isEditing ? "Editar H.·." : "Nuevo H.·."}
                 </h2>
                 <p className="mt-1 text-sm text-ink/60">
-                  Los valores posibles de grado son Aprendiz, Compañero y Maestro.
+                  Los valores posibles de grado son Aprendiz, Compañero y
+                  Maestro.
                 </p>
               </div>
 
@@ -1351,6 +1579,22 @@ export default function MembersPage() {
                     setForm((prev) => ({ ...prev, matricula: e.target.value }))
                   }
                   required
+                  className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-ink/80">
+                  Documento
+                </label>
+                <input
+                  value={form.documentNumber}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      documentNumber: e.target.value,
+                    }))
+                  }
                   className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
                 />
               </div>
@@ -1458,6 +1702,59 @@ export default function MembersPage() {
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-ink/80">
+                  Fecha de iniciación
+                </label>
+                <input
+                  type="date"
+                  value={form.initiationDate}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      initiationDate: e.target.value,
+                    }))
+                  }
+                  required
+                  className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-ink/80">
+                  Fecha de compañero
+                </label>
+                <input
+                  type="date"
+                  value={form.fellowcraftDate}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      fellowcraftDate: e.target.value,
+                    }))
+                  }
+                  required={
+                    form.grade === "COMPANERO" || form.grade === "MAESTRO"
+                  }
+                  className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-ink/80">
+                  Fecha de maestro
+                </label>
+                <input
+                  type="date"
+                  value={form.masterDate}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, masterDate: e.target.value }))
+                  }
+                  required={form.grade === "MAESTRO"}
+                  className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-ink/80">
                   Fecha de nacimiento
                 </label>
                 <input
@@ -1530,7 +1827,11 @@ export default function MembersPage() {
                   disabled={saving}
                   className="flex-1 rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
                 >
-                  {saving ? 'Guardando...' : isEditing ? 'Guardar cambios' : 'Guardar'}
+                  {saving
+                    ? "Guardando..."
+                    : isEditing
+                      ? "Guardar cambios"
+                      : "Guardar"}
                 </button>
               </div>
             </form>
