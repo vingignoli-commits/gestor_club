@@ -8,18 +8,35 @@ datasource db {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
+  id           String           @id @default(cuid())
+  email        String           @unique
   fullName     String
   role         UserRole
+  memberId     String?          @unique
   passwordHash String
   passwordSalt String
-  isActive     Boolean   @default(true)
+  isActive     Boolean          @default(true)
   lastLoginAt  DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  member       Member?          @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  permissions  UserPermission[]
 
   @@index([role, isActive])
+  @@index([memberId])
+}
+
+model UserPermission {
+  id        String   @id @default(cuid())
+  userId    String
+  key       String
+  enabled   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([key, enabled])
 }
 
 model Member {
@@ -42,6 +59,7 @@ model Member {
   statusHistory   MemberStatusHistory[]
   messages        MessageDispatch[]
   payments        Payment[]
+  user            User?
 
   @@index([lastName, firstName])
   @@index([status, category])
@@ -189,33 +207,25 @@ model WhatsappTemplate {
 }
 
 model MessageDispatch {
-  id            String         @id @default(cuid())
+  id            String            @id @default(cuid())
   memberId      String?
   templateId    String?
   destination   String
   renderedBody  String
-  status        MessageStatus  @default(PENDING)
+  status        MessageStatus     @default(PENDING)
   campaignCode  String?
   campaignYear  Int?
   campaignMonth Int?
   scheduledAt   DateTime?
   sentAt        DateTime?
   errorMessage  String?
-  createdAt     DateTime       @default(now())
-  member        Member?        @relation(fields: [memberId], references: [id])
+  createdAt     DateTime          @default(now())
+  member        Member?           @relation(fields: [memberId], references: [id])
   template      WhatsappTemplate? @relation(fields: [templateId], references: [id])
 
   @@index([status, scheduledAt])
   @@index([campaignCode, campaignYear, campaignMonth])
   @@index([memberId, campaignCode, campaignYear, campaignMonth])
-}
-
-model User {
-  id String @id
-
-  memberId String?
-
-  member Member? @relation(fields:[memberId], references:[id])
 }
 
 model AuditLog {
