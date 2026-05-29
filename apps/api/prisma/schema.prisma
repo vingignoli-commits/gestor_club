@@ -42,6 +42,7 @@ model UserPermission {
 model Member {
   id              String                  @id @default(cuid())
   matricula       String                  @unique
+  documentNumber  String?
   firstName       String
   lastName        String
   category        MemberCategory
@@ -51,6 +52,9 @@ model Member {
   email           String?
   notes           String?
   joinedAt        DateTime
+  initiationDate  DateTime
+  fellowcraftDate DateTime?
+  masterDate      DateTime?
   birthDate       DateTime?
   createdAt       DateTime                @default(now())
   updatedAt       DateTime                @updatedAt
