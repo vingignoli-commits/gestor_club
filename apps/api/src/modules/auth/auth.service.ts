@@ -4,16 +4,21 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import { PaymentStatus, UserRole } from '@prisma/client';
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
+import {
+  buildCurrentRatesMap,
+  buildDebtSnapshot,
+} from '../members/member-debt.utils';
 
 type AuthUser = {
   id: string;
   email: string;
   fullName: string;
   role: UserRole;
+  memberId: string | null;
 };
 
 type CreateUserDto = {
@@ -21,12 +26,16 @@ type CreateUserDto = {
   fullName: string;
   role: UserRole;
   password: string;
+  memberId?: string | null;
+  permissions?: string[];
 };
 
 type UpdateUserDto = {
   fullName?: string;
   role?: UserRole;
   isActive?: boolean;
+  memberId?: string | null;
+  permissions?: string[];
 };
 
 type ResetPasswordDto = {
@@ -40,6 +49,35 @@ type RecoverAdminDto = {
   newPassword?: string;
 };
 
+const ALL_PERMISSIONS = [
+  'dashboard:read',
+  'dashboard:full',
+  'members:read',
+  'members:write',
+  'profile:own',
+  'debt:own',
+  'debt:all',
+  'treasury:read',
+  'treasury:write',
+  'cash:read',
+  'cash:write',
+  'reports:read',
+  'messaging:read',
+  'messaging:write',
+  'audit:read',
+  'settings:read',
+  'settings:write',
+] as const;
+
+const ADMIN_PERMISSIONS = [...ALL_PERMISSIONS];
+
+const SOCIO_DEFAULT_PERMISSIONS = [
+  'dashboard:read',
+  'members:read',
+  'profile:own',
+  'debt:own',
+];
+
 @Injectable()
 export class AuthService {
   constructor(private readonly prisma: PrismaService) {}
@@ -49,6 +87,7 @@ export class AuthService {
 
     const user = await this.prisma.user.findUnique({
       where: { email },
+      include: { permissions: true },
     });
 
     if (!user || !user.isActive) {
@@ -84,6 +123,7 @@ export class AuthService {
       email: user.email,
       fullName: user.fullName,
       role: user.role,
+      memberId: user.memberId,
     };
 
     const accessToken = this.signToken(authUser);
@@ -91,7 +131,7 @@ export class AuthService {
     return {
       accessToken,
       token: accessToken,
-      user: this.publicUser(authUser, true),
+      user: this.publicUser(authUser, user.isActive, user.permissions),
     };
   }
 
@@ -101,6 +141,7 @@ export class AuthService {
 
     const user = await this.prisma.user.findUnique({
       where: { id: payload.id },
+      include: { permissions: true },
     });
 
     if (!user || !user.isActive) {
@@ -113,9 +154,104 @@ export class AuthService {
         email: user.email,
         fullName: user.fullName,
         role: user.role,
+        memberId: user.memberId,
       },
       user.isActive,
+      user.permissions,
     );
+  }
+
+  async myProfile(authorization?: string) {
+    const token = this.extractBearerToken(authorization);
+    const payload = this.verifyToken(token);
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.id },
+      include: { permissions: true },
+    });
+
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('Sesión inválida.');
+    }
+
+    if (!user.memberId) {
+      throw new BadRequestException(
+        'Tu usuario todavía no está vinculado a un socio del Cuadro.',
+      );
+    }
+
+    const today = new Date();
+
+    const [member, rates] = await Promise.all([
+      this.prisma.member.findUnique({
+        where: { id: user.memberId },
+        include: {
+          payments: {
+            where: { status: PaymentStatus.REGISTERED },
+            orderBy: [{ periodYear: 'desc' }, { periodMonth: 'desc' }],
+            take: 12,
+          },
+          statusHistory: {
+            orderBy: { effectiveFrom: 'desc' },
+          },
+          categoryHistory: {
+            orderBy: { effectiveFrom: 'desc' },
+          },
+        },
+      }),
+      this.prisma.monthlyRate.findMany({
+        where: {
+          validFrom: { lte: today },
+          OR: [{ validTo: null }, { validTo: { gt: today } }],
+        },
+        orderBy: [{ category: 'asc' }, { validFrom: 'desc' }],
+      }),
+    ]);
+
+    if (!member) {
+      throw new NotFoundException('Socio vinculado no encontrado.');
+    }
+
+    const currentRates = buildCurrentRatesMap(rates, today);
+    const debt = buildDebtSnapshot(member, currentRates, today);
+    const currentRate = currentRates.get(member.category) ?? 0;
+
+    return {
+      member: {
+        id: member.id,
+        matricula: member.matricula,
+        firstName: member.firstName,
+        lastName: member.lastName,
+        fullName: `${member.lastName}, ${member.firstName}`,
+        category: member.category,
+        status: member.status,
+        grade: member.grade,
+        phone: member.phone,
+        email: member.email,
+        notes: member.notes,
+        joinedAt: member.joinedAt,
+        birthDate: member.birthDate,
+        seniorityYears: this.calculateYears(member.joinedAt, today),
+      },
+      account: {
+        currentRate,
+        debt,
+        lastPayments: member.payments.map((payment) => ({
+          id: payment.id,
+          paidAt: payment.paidAt,
+          periodYear: payment.periodYear,
+          periodMonth: payment.periodMonth,
+          amount: Number(payment.amount),
+          methodCode: payment.methodCode,
+          receiptUrl: payment.receiptUrl,
+          receiptNote: payment.receiptNote,
+        })),
+      },
+      history: {
+        status: member.statusHistory,
+        category: member.categoryHistory,
+      },
+    };
   }
 
   async recoverAdmin(dto: RecoverAdminDto) {
@@ -140,6 +276,7 @@ export class AuthService {
     const email = dto.email.trim().toLowerCase();
     const user = await this.prisma.user.findUnique({
       where: { email },
+      include: { permissions: true },
     });
 
     if (!user || user.role !== UserRole.ADMIN) {
@@ -156,6 +293,7 @@ export class AuthService {
         isActive: true,
         updatedAt: new Date(),
       },
+      include: { permissions: true },
     });
 
     return this.publicUser(
@@ -164,23 +302,56 @@ export class AuthService {
         email: updated.email,
         fullName: updated.fullName,
         role: updated.role,
+        memberId: updated.memberId,
       },
       updated.isActive,
+      updated.permissions,
     );
   }
 
   async listUsers() {
-    return this.prisma.user.findMany({
+    const users = await this.prisma.user.findMany({
       orderBy: [{ role: 'asc' }, { fullName: 'asc' }],
+      include: {
+        member: {
+          select: {
+            id: true,
+            matricula: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+        permissions: true,
+      },
+    });
+
+    return users.map((user) => ({
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      role: user.role,
+      memberId: user.memberId,
+      member: user.member,
+      isActive: user.isActive,
+      lastLoginAt: user.lastLoginAt,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+      permissions: this.permissionsForUser(user.role, user.permissions),
+    }));
+  }
+
+  async listMembersForUserLinking() {
+    return this.prisma.member.findMany({
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
       select: {
         id: true,
+        matricula: true,
+        firstName: true,
+        lastName: true,
+        category: true,
+        status: true,
+        grade: true,
         email: true,
-        fullName: true,
-        role: true,
-        isActive: true,
-        lastLoginAt: true,
-        createdAt: true,
-        updatedAt: true,
       },
     });
   }
@@ -204,38 +375,43 @@ export class AuthService {
       throw new BadRequestException('Rol inválido.');
     }
 
+    if (dto.role === UserRole.SOCIO && !dto.memberId) {
+      throw new BadRequestException('El usuario socio debe estar vinculado a un H.·.');
+    }
+
     const existing = await this.prisma.user.findUnique({ where: { email } });
 
     if (existing) {
       throw new BadRequestException('Ya existe un usuario con ese email.');
     }
 
+    if (dto.memberId) {
+      await this.ensureMemberCanBeLinked(dto.memberId);
+    }
+
     const passwordData = this.hashPassword(password);
 
-    return this.prisma.user.create({
+    const created = await this.prisma.user.create({
       data: {
         email,
         fullName,
         role: dto.role,
+        memberId: dto.memberId || null,
         passwordHash: passwordData.hash,
         passwordSalt: passwordData.salt,
         isActive: true,
       },
-      select: {
-        id: true,
-        email: true,
-        fullName: true,
-        role: true,
-        isActive: true,
-        lastLoginAt: true,
-        createdAt: true,
-        updatedAt: true,
-      },
     });
+
+    await this.replaceUserPermissions(created.id, dto.permissions ?? []);
+    return this.getPublicSystemUser(created.id);
   }
 
   async updateUser(id: string, dto: UpdateUserDto) {
-    const user = await this.prisma.user.findUnique({ where: { id } });
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      include: { permissions: true },
+    });
 
     if (!user) {
       throw new NotFoundException('Usuario no encontrado.');
@@ -245,25 +421,44 @@ export class AuthService {
       throw new BadRequestException('Rol inválido.');
     }
 
-    return this.prisma.user.update({
+    const nextRole = dto.role ?? user.role;
+    const nextMemberId = dto.memberId === undefined ? user.memberId : dto.memberId;
+
+    if (nextRole === UserRole.SOCIO && !nextMemberId) {
+      throw new BadRequestException('El usuario socio debe estar vinculado a un H.·.');
+    }
+
+    if (nextMemberId && nextMemberId !== user.memberId) {
+      await this.ensureMemberCanBeLinked(nextMemberId, id);
+    }
+
+    await this.prisma.user.update({
       where: { id },
       data: {
         fullName: dto.fullName?.trim(),
         role: dto.role,
+        memberId: nextMemberId || null,
         isActive: dto.isActive,
         updatedAt: new Date(),
       },
-      select: {
-        id: true,
-        email: true,
-        fullName: true,
-        role: true,
-        isActive: true,
-        lastLoginAt: true,
-        createdAt: true,
-        updatedAt: true,
-      },
     });
+
+    if (dto.permissions) {
+      await this.replaceUserPermissions(id, dto.permissions);
+    }
+
+    return this.getPublicSystemUser(id);
+  }
+
+  async updateUserPermissions(id: string, permissions: string[]) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado.');
+    }
+
+    await this.replaceUserPermissions(id, permissions);
+    return this.getPublicSystemUser(id);
   }
 
   async resetUserPassword(id: string, dto: ResetPasswordDto) {
@@ -283,24 +478,16 @@ export class AuthService {
 
     const passwordData = this.hashPassword(password);
 
-    return this.prisma.user.update({
+    await this.prisma.user.update({
       where: { id },
       data: {
         passwordHash: passwordData.hash,
         passwordSalt: passwordData.salt,
         updatedAt: new Date(),
       },
-      select: {
-        id: true,
-        email: true,
-        fullName: true,
-        role: true,
-        isActive: true,
-        lastLoginAt: true,
-        createdAt: true,
-        updatedAt: true,
-      },
     });
+
+    return this.getPublicSystemUser(id);
   }
 
   verifyToken(token: string) {
@@ -334,39 +521,131 @@ export class AuthService {
       email: payload.email,
       fullName: payload.fullName,
       role: payload.role,
+      memberId: payload.memberId ?? null,
     };
   }
 
-  private publicUser(user: AuthUser, isActive: boolean) {
+  private async ensureMemberCanBeLinked(memberId: string, currentUserId?: string) {
+    const member = await this.prisma.member.findUnique({ where: { id: memberId } });
+
+    if (!member) {
+      throw new NotFoundException('H.·. vinculado no encontrado.');
+    }
+
+    const existingUser = await this.prisma.user.findUnique({
+      where: { memberId },
+    });
+
+    if (existingUser && existingUser.id !== currentUserId) {
+      throw new BadRequestException('Este H.·. ya está vinculado a otro usuario.');
+    }
+  }
+
+  private async getPublicSystemUser(id: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      include: {
+        member: {
+          select: {
+            id: true,
+            matricula: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+        permissions: true,
+      },
+    });
+
+    if (!user) throw new NotFoundException('Usuario no encontrado.');
+
     return {
       id: user.id,
       email: user.email,
       fullName: user.fullName,
       role: user.role,
-      isActive,
-      permissions: this.permissionsForRole(user.role),
+      memberId: user.memberId,
+      member: user.member,
+      isActive: user.isActive,
+      lastLoginAt: user.lastLoginAt,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+      permissions: this.permissionsForUser(user.role, user.permissions),
     };
   }
 
-  private permissionsForRole(role: UserRole) {
-    if (role === UserRole.ADMIN) {
-      return [
-        'dashboard:read',
-        'members:read',
-        'members:write',
-        'treasury:read',
-        'treasury:write',
-        'cash:read',
-        'cash:write',
-        'reports:read',
-        'messaging:read',
-        'messaging:write',
-        'settings:read',
-        'settings:write',
-      ];
+  private publicUser(
+    user: AuthUser,
+    isActive: boolean,
+    permissionRows: Array<{ key: string; enabled: boolean }> = [],
+  ) {
+    return {
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      role: user.role,
+      memberId: user.memberId,
+      isActive,
+      permissions: this.permissionsForUser(user.role, permissionRows),
+    };
+  }
+
+  private permissionsForUser(
+    role: UserRole,
+    permissionRows: Array<{ key: string; enabled: boolean }> = [],
+  ) {
+    if (role === UserRole.ADMIN) return ADMIN_PERMISSIONS;
+
+    const resolved = new Set(SOCIO_DEFAULT_PERMISSIONS);
+
+    for (const row of permissionRows) {
+      if (!ALL_PERMISSIONS.includes(row.key as (typeof ALL_PERMISSIONS)[number])) {
+        continue;
+      }
+
+      if (row.enabled) {
+        resolved.add(row.key);
+      } else {
+        resolved.delete(row.key);
+      }
     }
 
-    return ['dashboard:read', 'members:read'];
+    return Array.from(resolved);
+  }
+
+  private async replaceUserPermissions(userId: string, permissions: string[]) {
+    const cleanPermissions = Array.from(
+      new Set(
+        permissions.filter((permission) =>
+          ALL_PERMISSIONS.includes(permission as (typeof ALL_PERMISSIONS)[number]),
+        ),
+      ),
+    );
+
+    await this.prisma.userPermission.deleteMany({ where: { userId } });
+
+    if (cleanPermissions.length === 0) return;
+
+    await this.prisma.userPermission.createMany({
+      data: cleanPermissions.map((permission) => ({
+        userId,
+        key: permission,
+        enabled: true,
+      })),
+      skipDuplicates: true,
+    });
+  }
+
+  private calculateYears(from: Date, to: Date) {
+    let years = to.getUTCFullYear() - from.getUTCFullYear();
+    const monthDiff = to.getUTCMonth() - from.getUTCMonth();
+    const dayDiff = to.getUTCDate() - from.getUTCDate();
+
+    if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+      years -= 1;
+    }
+
+    return Math.max(0, years);
   }
 
   private extractBearerToken(authorization?: string) {
