@@ -18,6 +18,7 @@ type User = {
   email: string;
   fullName: string;
   role: UserRole;
+  memberId: string | null;
   isActive: boolean;
   permissions: string[];
 };
@@ -35,22 +36,22 @@ type AuthCtx = {
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   canAccess: (pathname: string) => boolean;
+  hasPermission: (permission: string) => boolean;
 };
 
 const AuthContext = createContext<AuthCtx | null>(null);
 
-const ADMIN_PATHS = [
-  '/',
-  '/socios',
-  '/tesoreria',
-  '/caja',
-  '/reportes',
-  '/mensajeria',
-  '/auditoria',
-  '/configuracion',
-];
-
-const SOCIO_PATHS = ['/', '/socios'];
+const PATH_PERMISSIONS: Record<string, string> = {
+  '/': 'dashboard:read',
+  '/socios': 'members:read',
+  '/mi-perfil': 'profile:own',
+  '/tesoreria': 'treasury:read',
+  '/caja': 'cash:read',
+  '/reportes': 'reports:read',
+  '/mensajeria': 'messaging:read',
+  '/auditoria': 'audit:read',
+  '/configuracion': 'settings:read',
+};
 
 function normalizePath(pathname: string) {
   if (pathname === '/') return '/';
@@ -109,16 +110,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }
 
+  const hasPermission = useCallback(
+    (permission: string) => {
+      if (!user) return false;
+      if (user.role === 'ADMIN') return true;
+      return user.permissions.includes(permission);
+    },
+    [user],
+  );
+
   const canAccess = useCallback(
     (pathname: string) => {
       if (!user) return false;
 
       const base = normalizePath(pathname);
+      const permission = PATH_PERMISSIONS[base];
 
-      if (user.role === 'ADMIN') return ADMIN_PATHS.includes(base);
-      if (user.role === 'SOCIO') return SOCIO_PATHS.includes(base);
+      if (!permission) return false;
+      if (user.role === 'ADMIN') return true;
 
-      return false;
+      return user.permissions.includes(permission);
     },
     [user],
   );
@@ -127,12 +138,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       loading,
-      canEdit: user?.role === 'ADMIN',
+      canEdit: hasPermission('members:write'),
       login,
       logout,
       canAccess,
+      hasPermission,
     }),
-    [user, loading, canAccess],
+    [user, loading, canAccess, hasPermission],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
