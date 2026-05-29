@@ -1,16 +1,14 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
-import { PrismaService } from '../prisma/prisma.service';
-import { CreateMemberDto } from './dto/create-member.dto';
-import { UpdateMemberDto } from './dto/update-member.dto';
-import {
-  buildCurrentRatesMap,
-  buildDebtSnapshot,
-} from './member-debt.utils';
+} from "@nestjs/common";
+import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
+import { PrismaService } from "../prisma/prisma.service";
+import { CreateMemberDto } from "./dto/create-member.dto";
+import { UpdateMemberDto } from "./dto/update-member.dto";
+import { buildCurrentRatesMap, buildDebtSnapshot } from "./member-debt.utils";
 
 @Injectable()
 export class MembersService {
@@ -24,41 +22,48 @@ export class MembersService {
               {
                 firstName: {
                   contains: search,
-                  mode: 'insensitive',
+                  mode: "insensitive",
                 },
               },
               {
                 lastName: {
                   contains: search,
-                  mode: 'insensitive',
+                  mode: "insensitive",
                 },
               },
               {
                 matricula: {
                   contains: search,
-                  mode: 'insensitive',
+                  mode: "insensitive",
                 },
               },
               {
                 email: {
                   contains: search,
-                  mode: 'insensitive',
+                  mode: "insensitive",
                 },
               },
               {
                 phone: {
                   contains: search,
-                  mode: 'insensitive',
+                  mode: "insensitive",
                 },
               },
             ],
           }
         : undefined,
-      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     });
   }
 
   async create(dto: CreateMemberDto) {
+    validateMasonicDates(
+      dto.grade ?? null,
+      dto.initiationDate,
+      dto.fellowcraftDate,
+      dto.masterDate,
+    );
+
     const joinedAt = new Date(dto.joinedAt);
     const joinedMonthStart = new Date(
       Date.UTC(joinedAt.getUTCFullYear(), joinedAt.getUTCMonth(), 1),
@@ -68,28 +73,34 @@ export class MembersService {
       return await this.prisma.member.create({
         data: {
           matricula: dto.matricula.trim(),
+          documentNumber: dto.documentNumber?.trim() || null,
           firstName: dto.firstName.trim(),
           lastName: dto.lastName.trim(),
           category: dto.category,
-          status: dto.status ?? 'ACTIVE',
+          status: dto.status ?? "ACTIVE",
           grade: dto.grade ?? null,
           phone: dto.phone?.trim() || null,
           email: dto.email?.trim() || null,
           notes: dto.notes?.trim() || null,
           joinedAt,
+          initiationDate: new Date(dto.initiationDate),
+          fellowcraftDate: dto.fellowcraftDate
+            ? new Date(dto.fellowcraftDate)
+            : null,
+          masterDate: dto.masterDate ? new Date(dto.masterDate) : null,
           birthDate: dto.birthDate ? new Date(dto.birthDate) : null,
           statusHistory: {
             create: {
-              status: dto.status ?? 'ACTIVE',
+              status: dto.status ?? "ACTIVE",
               effectiveFrom: joinedAt,
-              reason: 'Alta inicial',
+              reason: "Alta inicial",
             },
           },
           categoryHistory: {
             create: {
               category: dto.category,
               effectiveFrom: joinedMonthStart,
-              reason: 'Categoría inicial',
+              reason: "Categoría inicial",
             },
           },
         },
@@ -97,9 +108,9 @@ export class MembersService {
     } catch (error) {
       if (
         error instanceof PrismaClientKnownRequestError &&
-        error.code === 'P2002'
+        error.code === "P2002"
       ) {
-        throw new ConflictException('La matrícula ya existe.');
+        throw new ConflictException("La matrícula ya existe.");
       }
 
       throw error;
@@ -112,22 +123,22 @@ export class MembersService {
       include: {
         charges: {
           include: { billingPeriod: true },
-          orderBy: { dueDate: 'desc' },
+          orderBy: { dueDate: "desc" },
         },
         payments: {
-          orderBy: [{ periodYear: 'desc' }, { periodMonth: 'desc' }],
+          orderBy: [{ periodYear: "desc" }, { periodMonth: "desc" }],
         },
         statusHistory: {
-          orderBy: { effectiveFrom: 'desc' },
+          orderBy: { effectiveFrom: "desc" },
         },
         categoryHistory: {
-          orderBy: { effectiveFrom: 'desc' },
+          orderBy: { effectiveFrom: "desc" },
         },
       },
     });
 
     if (!member) {
-      throw new NotFoundException('Socio no encontrado');
+      throw new NotFoundException("Socio no encontrado");
     }
 
     return member;
@@ -135,6 +146,21 @@ export class MembersService {
 
   async update(id: string, dto: UpdateMemberDto) {
     const member = await this.findOne(id);
+
+    if (
+      dto.grade !== undefined ||
+      dto.initiationDate !== undefined ||
+      dto.fellowcraftDate !== undefined ||
+      dto.masterDate !== undefined
+    ) {
+      validateMasonicDates(
+        dto.grade ?? member.grade,
+        dto.initiationDate ?? member.initiationDate?.toISOString(),
+        dto.fellowcraftDate ?? member.fellowcraftDate?.toISOString(),
+        dto.masterDate ?? member.masterDate?.toISOString(),
+      );
+    }
+
     const effectiveFrom = firstDayOfCurrentMonth();
 
     try {
@@ -155,7 +181,7 @@ export class MembersService {
               memberId: id,
               category: dto.category,
               effectiveFrom,
-              reason: 'Cambio de categoría',
+              reason: "Cambio de categoría",
             },
           });
         }
@@ -176,7 +202,7 @@ export class MembersService {
               memberId: id,
               status: dto.status,
               effectiveFrom,
-              reason: 'Cambio de estado',
+              reason: "Cambio de estado",
             },
           });
         }
@@ -185,14 +211,37 @@ export class MembersService {
           where: { id },
           data: {
             matricula: dto.matricula?.trim(),
+            documentNumber:
+              dto.documentNumber === undefined
+                ? undefined
+                : dto.documentNumber.trim() || null,
             firstName: dto.firstName?.trim(),
             lastName: dto.lastName?.trim(),
             category: dto.category,
             status: dto.status,
             grade: dto.grade === undefined ? undefined : dto.grade || null,
-            phone: dto.phone === undefined ? undefined : dto.phone.trim() || null,
-            email: dto.email === undefined ? undefined : dto.email.trim() || null,
-            notes: dto.notes === undefined ? undefined : dto.notes.trim() || null,
+            phone:
+              dto.phone === undefined ? undefined : dto.phone.trim() || null,
+            email:
+              dto.email === undefined ? undefined : dto.email.trim() || null,
+            notes:
+              dto.notes === undefined ? undefined : dto.notes.trim() || null,
+            initiationDate:
+              dto.initiationDate === undefined
+                ? undefined
+                : new Date(dto.initiationDate),
+            fellowcraftDate:
+              dto.fellowcraftDate === undefined
+                ? undefined
+                : dto.fellowcraftDate
+                  ? new Date(dto.fellowcraftDate)
+                  : null,
+            masterDate:
+              dto.masterDate === undefined
+                ? undefined
+                : dto.masterDate
+                  ? new Date(dto.masterDate)
+                  : null,
             birthDate:
               dto.birthDate === undefined
                 ? undefined
@@ -205,9 +254,9 @@ export class MembersService {
     } catch (error) {
       if (
         error instanceof PrismaClientKnownRequestError &&
-        error.code === 'P2002'
+        error.code === "P2002"
       ) {
-        throw new ConflictException('La matrícula ya existe.');
+        throw new ConflictException("La matrícula ya existe.");
       }
 
       throw error;
@@ -221,14 +270,14 @@ export class MembersService {
       this.prisma.member.findMany({
         include: {
           payments: {
-            where: { status: 'REGISTERED' },
-            orderBy: [{ periodYear: 'desc' }, { periodMonth: 'desc' }],
+            where: { status: "REGISTERED" },
+            orderBy: [{ periodYear: "desc" }, { periodMonth: "desc" }],
           },
           statusHistory: {
-            orderBy: { effectiveFrom: 'desc' },
+            orderBy: { effectiveFrom: "desc" },
           },
           categoryHistory: {
-            orderBy: { effectiveFrom: 'desc' },
+            orderBy: { effectiveFrom: "desc" },
           },
         },
       }),
@@ -237,7 +286,7 @@ export class MembersService {
           validFrom: { lte: queryDate },
           OR: [{ validTo: null }, { validTo: { gt: queryDate } }],
         },
-        orderBy: [{ category: 'asc' }, { validFrom: 'desc' }],
+        orderBy: [{ category: "asc" }, { validFrom: "desc" }],
       }),
     ]);
 
@@ -280,7 +329,7 @@ export class MembersService {
           validFrom: { lte: queryDate },
           OR: [{ validTo: null }, { validTo: { gt: queryDate } }],
         },
-        orderBy: [{ category: 'asc' }, { validFrom: 'desc' }],
+        orderBy: [{ category: "asc" }, { validFrom: "desc" }],
       }),
     ]);
 
@@ -301,6 +350,29 @@ export class MembersService {
         months: snapshot.months,
       },
     };
+  }
+}
+
+function validateMasonicDates(
+  grade: string | null,
+  initiationDate?: string | null,
+  fellowcraftDate?: string | null,
+  masterDate?: string | null,
+) {
+  if (!initiationDate) {
+    throw new BadRequestException("La fecha de iniciación es obligatoria.");
+  }
+
+  if (["COMPANERO", "MAESTRO"].includes(grade ?? "") && !fellowcraftDate) {
+    throw new BadRequestException(
+      "La fecha de compañero es obligatoria para compañeros y maestros.",
+    );
+  }
+
+  if (grade === "MAESTRO" && !masterDate) {
+    throw new BadRequestException(
+      "La fecha de maestro es obligatoria para maestros.",
+    );
   }
 }
 
