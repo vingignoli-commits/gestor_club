@@ -173,13 +173,17 @@ export function buildDebtSnapshot(
 
   const debt = months.reduce((sum, month) => sum + Number(month.amount), 0);
   const overdueMonths = months.filter((month) => month.overdue);
+  const monthsOwed = months.length;
 
   return {
     debt,
-    monthsOwed: months.length,
+    monthsOwed,
     owesCurrentMonth: months.some((month) => month.isCurrentMonth),
     overdueMonthsCount: overdueMonths.length,
     overdueMonthLabels: overdueMonths.map((month) => month.label),
+    debtLevel: debtLevel(monthsOwed),
+    debtLevelLabel: debtLevelLabel(monthsOwed),
+    debtColor: debtColor(monthsOwed),
     months,
   };
 }
@@ -308,4 +312,25 @@ function periodKey(year: number, month: number): string {
 
 function monthLabel(year: number, month: number): string {
   return `${MONTHS_ES[month - 1]} ${year}`;
+}
+
+function debtLevel(monthsOwed: number) {
+  if (monthsOwed <= 0) return "NONE";
+  if (monthsOwed === 1) return "LOW";
+  if (monthsOwed <= 3) return "MEDIUM";
+  return "HIGH";
+}
+
+function debtLevelLabel(monthsOwed: number) {
+  if (monthsOwed <= 0) return "Sin deuda";
+  if (monthsOwed === 1) return "Baja";
+  if (monthsOwed <= 3) return "Media";
+  return "Alta";
+}
+
+function debtColor(monthsOwed: number) {
+  if (monthsOwed <= 0) return "gray";
+  if (monthsOwed === 1) return "green";
+  if (monthsOwed <= 3) return "yellow";
+  return "red";
 }
