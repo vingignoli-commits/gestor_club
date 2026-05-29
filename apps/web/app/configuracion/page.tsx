@@ -65,6 +65,14 @@ type UserForm = {
   permissions: string[];
 };
 
+type BulkAccessResult = {
+  created: number;
+  skippedWithoutEmail: number;
+  skippedExistingEmail: number;
+  skippedLinkedMember: number;
+  password: string;
+};
+
 const PERMISSION_GROUPS: Array<{
   title: string;
   items: Array<{ key: PermissionKey; label: string }>;
@@ -256,6 +264,33 @@ export default function ConfiguracionPage() {
   function closePasswordReset() {
     setPasswordUserId(null);
     setNewPassword('');
+  }
+
+  async function handleCreateMemberAccesses() {
+    if (!isAdmin) return;
+
+    clearMessages();
+    setSaving(true);
+
+    try {
+      const result = await api.post<BulkAccessResult>(
+        '/auth/users/create-member-accesses',
+        {},
+      );
+
+      setSuccess(
+        `Accesos creados: ${result.created}. Omitidos por email existente: ${result.skippedExistingEmail}. Omitidos por socio ya vinculado: ${result.skippedLinkedMember}. Omitidos sin email: ${result.skippedWithoutEmail}. Contraseña inicial: ${result.password}`,
+      );
+      await loadData();
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Error al crear accesos automáticos para socios',
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function handleCreateUser(e: React.FormEvent) {
@@ -466,6 +501,15 @@ export default function ConfiguracionPage() {
             className="rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-white"
           >
             + Nuevo usuario
+          </button>
+
+          <button
+            type="button"
+            onClick={handleCreateMemberAccesses}
+            disabled={saving}
+            className="rounded-2xl border border-ink/10 bg-white px-5 py-3 text-sm font-semibold text-ink disabled:opacity-60"
+          >
+            Crear accesos para socios con email
           </button>
         </div>
       </SectionCard>
