@@ -206,65 +206,61 @@ export default function MiPerfilPage() {
 
       <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
         <SectionCard
-          title="Datos personales"
-          description="Ficha básica vinculada al Cuadro."
+          title="Datos Personales"
+          description="Ficha personal vinculada al Cuadro."
         >
           <div className="grid gap-3 text-sm text-ink/80">
             <div>
               <strong>Nombre:</strong> {profile.member.firstName}
             </div>
+        
             <div>
               <strong>Apellido:</strong> {profile.member.lastName}
             </div>
+        
             <div>
-              <strong>Documento:</strong> {profile.member.documentNumber ?? "-"}
+              <strong>Documento:</strong>{" "}
+              {profile.member.documentNumber ?? "-"}
             </div>
-            <div>
-              <strong>Fecha de ingreso administrativo:</strong>{" "}
-              {formatDate(profile.member.joinedAt)}
-            </div>
-            <div>
-              <strong>Antigüedad masónica:</strong>{" "}
-              {profile.member.seniorityYears} años
-            </div>
-            <div>
-              <strong>Fecha de nacimiento:</strong>{" "}
-              {formatDate(profile.member.birthDate)}
-            </div>
-            <div>
-              <strong>Próximo cumpleaños:</strong> {nextBirthday}
-            </div>
-            <div>
-              <strong>Teléfono:</strong> {profile.member.phone ?? "-"}
-            </div>
-            <div>
-              <strong>Email:</strong> {profile.member.email ?? "-"}
-            </div>
-            <div>
-              <strong>Notas:</strong> {profile.member.notes ?? "-"}
-            </div>
-          </div>
-        </SectionCard>
-
-        <SectionCard
-          title="Trayectoria Masónica"
-          description="Fechas principales para calcular antigüedad y recorrido del H.·."
-        >
-          <div className="grid gap-3 text-sm text-ink/80">
-            <div>
-              <strong>Documento:</strong> {profile.member.documentNumber ?? "-"}
-            </div>
+        
             <div>
               <strong>Fecha de iniciación:</strong>{" "}
               {formatDate(profile.member.initiationDate)}
             </div>
+        
             <div>
               <strong>Fecha de compañero:</strong>{" "}
               {formatDate(profile.member.fellowcraftDate)}
             </div>
+        
             <div>
               <strong>Fecha de maestro:</strong>{" "}
               {formatDate(profile.member.masterDate)}
+            </div>
+        
+            <div>
+              <strong>Antigüedad masónica:</strong>{" "}
+              {profile.member.seniorityYears} años
+            </div>
+        
+            <div>
+              <strong>Fecha de nacimiento:</strong>{" "}
+              {formatDate(profile.member.birthDate)}
+            </div>
+        
+            <div>
+              <strong>Teléfono:</strong>{" "}
+              {profile.member.phone ?? "-"}
+            </div>
+        
+            <div>
+              <strong>Email:</strong>{" "}
+              {profile.member.email ?? "-"}
+            </div>
+        
+            <div>
+              <strong>Notas:</strong>{" "}
+              {profile.member.notes ?? "-"}
             </div>
           </div>
         </SectionCard>
