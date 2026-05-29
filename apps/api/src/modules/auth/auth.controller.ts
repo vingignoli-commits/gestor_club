@@ -45,6 +45,11 @@ export class AuthController {
     return this.authService.listMembersForUserLinking();
   }
 
+  @Post('users/create-member-accesses')
+  createMemberAccesses() {
+    return this.authService.createMemberAccesses();
+  }
+
   @Post('users')
   createUser(
     @Body()
