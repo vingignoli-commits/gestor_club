@@ -65,4 +65,19 @@ export class CreateMemberDto {
   @IsOptional()
   @IsDateString()
   birthDate?: string;
+
+  @IsOptional()
+  @IsString()
+  documentNumber?: string;
+  
+  @IsDateString()
+  initiationDate!: string;
+  
+  @IsOptional()
+  @IsDateString()
+  fellowcraftDate?: string;
+  
+  @IsOptional()
+  @IsDateString()
+  masterDate?: string;
 }
