@@ -9,16 +9,17 @@ import { useAuth } from '../context/auth';
 const navigation: Array<{
   label: string;
   href: Route;
-  roles: Array<'ADMIN' | 'SOCIO'>;
+  permission: string;
 }> = [
-  { label: 'Dashboard', href: '/', roles: ['ADMIN', 'SOCIO'] },
-  { label: 'Cuadro', href: '/socios', roles: ['ADMIN', 'SOCIO'] },
-  { label: 'Tesorería', href: '/tesoreria', roles: ['ADMIN'] },
-  { label: 'Caja', href: '/caja', roles: ['ADMIN'] },
-  { label: 'Reportes', href: '/reportes', roles: ['ADMIN'] },
-  { label: 'Mensajería', href: '/mensajeria', roles: ['ADMIN'] },
-  { label: 'Auditoría', href: '/auditoria', roles: ['ADMIN'] },
-  { label: 'Configuración', href: '/configuracion', roles: ['ADMIN'] },
+  { label: 'Dashboard', href: '/', permission: 'dashboard:read' },
+  { label: 'Cuadro', href: '/socios', permission: 'members:read' },
+  { label: 'Mi Perfil', href: '/mi-perfil', permission: 'profile:own' },
+  { label: 'Tesorería', href: '/tesoreria', permission: 'treasury:read' },
+  { label: 'Caja', href: '/caja', permission: 'cash:read' },
+  { label: 'Reportes', href: '/reportes', permission: 'reports:read' },
+  { label: 'Mensajería', href: '/mensajeria', permission: 'messaging:read' },
+  { label: 'Auditoría', href: '/auditoria', permission: 'audit:read' },
+  { label: 'Configuración', href: '/configuracion', permission: 'settings:read' },
 ];
 
 function BrandBlock() {
@@ -73,11 +74,11 @@ function UserBox({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 function NavigationLinks({ onNavigate }: { onNavigate?: () => void }) {
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const pathname = usePathname();
 
   const items = navigation.filter(
-    (item) => user && item.roles.includes(user.role),
+    (item) => user && hasPermission(item.permission),
   );
 
   return (
