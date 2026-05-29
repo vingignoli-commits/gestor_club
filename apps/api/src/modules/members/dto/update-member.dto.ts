@@ -51,4 +51,20 @@ export class UpdateMemberDto {
   @IsOptional()
   @IsDateString()
   birthDate?: string;
+
+  @IsOptional()
+  @IsString()
+  documentNumber?: string;
+  
+  @IsOptional()
+  @IsDateString()
+  initiationDate?: string;
+  
+  @IsOptional()
+  @IsDateString()
+  fellowcraftDate?: string;
+  
+  @IsOptional()
+  @IsDateString()
+  masterDate?: string;  
 }
