@@ -461,6 +461,74 @@ export class AuthService {
     return this.getPublicSystemUser(id);
   }
 
+  async createMemberAccesses() {
+    const members = await this.prisma.member.findMany({
+      where: {
+        email: { not: null },
+      },
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+      },
+    });
+
+    let created = 0;
+    let skippedWithoutEmail = 0;
+    let skippedExistingEmail = 0;
+    let skippedLinkedMember = 0;
+
+    for (const member of members) {
+      const email = member.email?.trim().toLowerCase();
+
+      if (!email) {
+        skippedWithoutEmail += 1;
+        continue;
+      }
+
+      const [existingEmail, existingMemberLink] = await Promise.all([
+        this.prisma.user.findUnique({ where: { email } }),
+        this.prisma.user.findUnique({ where: { memberId: member.id } }),
+      ]);
+
+      if (existingEmail) {
+        skippedExistingEmail += 1;
+        continue;
+      }
+
+      if (existingMemberLink) {
+        skippedLinkedMember += 1;
+        continue;
+      }
+
+      const passwordData = this.hashPassword('progreso');
+      const user = await this.prisma.user.create({
+        data: {
+          email,
+          fullName: `${member.firstName} ${member.lastName}`.trim(),
+          role: UserRole.SOCIO,
+          memberId: member.id,
+          passwordHash: passwordData.hash,
+          passwordSalt: passwordData.salt,
+          isActive: true,
+        },
+      });
+
+      await this.replaceUserPermissions(user.id, SOCIO_DEFAULT_PERMISSIONS);
+      created += 1;
+    }
+
+    return {
+      created,
+      skippedWithoutEmail,
+      skippedExistingEmail,
+      skippedLinkedMember,
+      password: 'progreso',
+    };
+  }
+
   async resetUserPassword(id: string, dto: ResetPasswordDto) {
     const user = await this.prisma.user.findUnique({ where: { id } });
 
@@ -596,41 +664,31 @@ export class AuthService {
   ) {
     if (role === UserRole.ADMIN) return ADMIN_PERMISSIONS;
 
-    const resolved = new Set(SOCIO_DEFAULT_PERMISSIONS);
+    const validRows = permissionRows.filter((row) =>
+      ALL_PERMISSIONS.includes(row.key as (typeof ALL_PERMISSIONS)[number]),
+    );
 
-    for (const row of permissionRows) {
-      if (!ALL_PERMISSIONS.includes(row.key as (typeof ALL_PERMISSIONS)[number])) {
-        continue;
-      }
-
-      if (row.enabled) {
-        resolved.add(row.key);
-      } else {
-        resolved.delete(row.key);
-      }
+    if (validRows.length === 0) {
+      return SOCIO_DEFAULT_PERMISSIONS;
     }
 
-    return Array.from(resolved);
+    return validRows.filter((row) => row.enabled).map((row) => row.key);
   }
 
   private async replaceUserPermissions(userId: string, permissions: string[]) {
-    const cleanPermissions = Array.from(
-      new Set(
-        permissions.filter((permission) =>
-          ALL_PERMISSIONS.includes(permission as (typeof ALL_PERMISSIONS)[number]),
-        ),
+    const cleanPermissions = new Set(
+      permissions.filter((permission) =>
+        ALL_PERMISSIONS.includes(permission as (typeof ALL_PERMISSIONS)[number]),
       ),
     );
 
     await this.prisma.userPermission.deleteMany({ where: { userId } });
 
-    if (cleanPermissions.length === 0) return;
-
     await this.prisma.userPermission.createMany({
-      data: cleanPermissions.map((permission) => ({
+      data: ALL_PERMISSIONS.map((permission) => ({
         userId,
         key: permission,
-        enabled: true,
+        enabled: cleanPermissions.has(permission),
       })),
       skipDuplicates: true,
     });
