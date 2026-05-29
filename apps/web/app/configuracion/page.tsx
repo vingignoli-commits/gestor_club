@@ -7,11 +7,49 @@ import { api } from '../../lib/api';
 
 type UserRole = 'ADMIN' | 'SOCIO';
 
+type PermissionKey =
+  | 'dashboard:read'
+  | 'dashboard:full'
+  | 'members:read'
+  | 'members:write'
+  | 'profile:own'
+  | 'debt:own'
+  | 'debt:all'
+  | 'treasury:read'
+  | 'treasury:write'
+  | 'cash:read'
+  | 'cash:write'
+  | 'reports:read'
+  | 'messaging:read'
+  | 'messaging:write'
+  | 'audit:read'
+  | 'settings:read'
+  | 'settings:write';
+
+type MemberOption = {
+  id: string;
+  matricula: string;
+  firstName: string;
+  lastName: string;
+  category: string;
+  status: string;
+  grade: string | null;
+  email: string | null;
+};
+
 type SystemUser = {
   id: string;
   email: string;
   fullName: string;
   role: UserRole;
+  memberId: string | null;
+  member: {
+    id: string;
+    matricula: string;
+    firstName: string;
+    lastName: string;
+  } | null;
+  permissions: string[];
   isActive: boolean;
   lastLoginAt: string | null;
   createdAt: string;
@@ -22,15 +60,64 @@ type UserForm = {
   email: string;
   fullName: string;
   role: UserRole;
+  memberId: string;
   password: string;
+  permissions: string[];
 };
+
+const PERMISSION_GROUPS: Array<{
+  title: string;
+  items: Array<{ key: PermissionKey; label: string }>;
+}> = [
+  {
+    title: 'Lectura base',
+    items: [
+      { key: 'dashboard:read', label: 'Ver dashboard' },
+      { key: 'members:read', label: 'Ver cuadro' },
+      { key: 'profile:own', label: 'Ver mi perfil' },
+      { key: 'debt:own', label: 'Ver mi deuda' },
+    ],
+  },
+  {
+    title: 'Permisos especiales del socio',
+    items: [
+      { key: 'dashboard:full', label: 'Dashboard completo' },
+      { key: 'members:write', label: 'Editar cuadro' },
+      { key: 'debt:all', label: 'Ver deuda de otros' },
+      { key: 'treasury:read', label: 'Ver tesorería' },
+      { key: 'cash:read', label: 'Ver caja' },
+      { key: 'reports:read', label: 'Ver reportes' },
+      { key: 'messaging:read', label: 'Ver mensajería' },
+      { key: 'audit:read', label: 'Ver auditoría' },
+    ],
+  },
+  {
+    title: 'Permisos de escritura',
+    items: [
+      { key: 'treasury:write', label: 'Editar tesorería' },
+      { key: 'cash:write', label: 'Editar caja' },
+      { key: 'messaging:write', label: 'Enviar/editar mensajes' },
+      { key: 'settings:read', label: 'Ver configuración' },
+      { key: 'settings:write', label: 'Editar configuración' },
+    ],
+  },
+];
+
+const DEFAULT_SOCIO_PERMISSIONS = [
+  'dashboard:read',
+  'members:read',
+  'profile:own',
+  'debt:own',
+];
 
 function emptyUserForm(): UserForm {
   return {
     email: '',
     fullName: '',
     role: 'SOCIO',
+    memberId: '',
     password: '',
+    permissions: DEFAULT_SOCIO_PERMISSIONS,
   };
 }
 
@@ -48,10 +135,20 @@ function statusLabel(isActive: boolean) {
   return isActive ? 'Activo' : 'Inactivo';
 }
 
+function memberLabel(member: MemberOption) {
+  return `${member.lastName}, ${member.firstName} — ${member.matricula}`;
+}
+
+function linkedMemberLabel(member: SystemUser['member']) {
+  if (!member) return '-';
+  return `${member.lastName}, ${member.firstName} — ${member.matricula}`;
+}
+
 export default function ConfiguracionPage() {
   const { user, canEdit } = useAuth();
 
   const [users, setUsers] = useState<SystemUser[]>([]);
+  const [members, setMembers] = useState<MemberOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -63,6 +160,8 @@ export default function ConfiguracionPage() {
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editingFullName, setEditingFullName] = useState('');
   const [editingRole, setEditingRole] = useState<UserRole>('SOCIO');
+  const [editingMemberId, setEditingMemberId] = useState('');
+  const [editingPermissions, setEditingPermissions] = useState<string[]>([]);
 
   const [passwordUserId, setPasswordUserId] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState('');
@@ -79,15 +178,20 @@ export default function ConfiguracionPage() {
     [users],
   );
 
-  async function loadUsers() {
-    const data = await api.get<SystemUser[]>('/auth/users');
-    setUsers(data);
+  async function loadData() {
+    const [usersData, membersData] = await Promise.all([
+      api.get<SystemUser[]>('/auth/users'),
+      api.get<MemberOption[]>('/auth/users/member-options'),
+    ]);
+
+    setUsers(usersData);
+    setMembers(membersData);
   }
 
   useEffect(() => {
-    loadUsers()
+    loadData()
       .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : 'Error al cargar usuarios');
+        setError(err instanceof Error ? err.message : 'Error al cargar configuración');
       })
       .finally(() => setLoading(false));
   }, []);
@@ -95,6 +199,24 @@ export default function ConfiguracionPage() {
   function clearMessages() {
     setError('');
     setSuccess('');
+  }
+
+  function togglePermission(permission: string, mode: 'create' | 'edit') {
+    if (mode === 'create') {
+      setUserForm((prev) => ({
+        ...prev,
+        permissions: prev.permissions.includes(permission)
+          ? prev.permissions.filter((item) => item !== permission)
+          : [...prev.permissions, permission],
+      }));
+      return;
+    }
+
+    setEditingPermissions((prev) =>
+      prev.includes(permission)
+        ? prev.filter((item) => item !== permission)
+        : [...prev, permission],
+    );
   }
 
   function openCreateUser() {
@@ -113,12 +235,16 @@ export default function ConfiguracionPage() {
     setEditingUserId(item.id);
     setEditingFullName(item.fullName);
     setEditingRole(item.role);
+    setEditingMemberId(item.memberId ?? '');
+    setEditingPermissions(item.permissions);
   }
 
   function closeEditUser() {
     setEditingUserId(null);
     setEditingFullName('');
     setEditingRole('SOCIO');
+    setEditingMemberId('');
+    setEditingPermissions([]);
   }
 
   function openPasswordReset(item: SystemUser) {
@@ -144,12 +270,14 @@ export default function ConfiguracionPage() {
         email: userForm.email.trim(),
         fullName: userForm.fullName.trim(),
         role: userForm.role,
+        memberId: userForm.memberId || null,
         password: userForm.password,
+        permissions: userForm.permissions,
       });
 
       closeCreateUser();
       setSuccess('Usuario creado correctamente.');
-      await loadUsers();
+      await loadData();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error al crear usuario');
     } finally {
@@ -168,11 +296,13 @@ export default function ConfiguracionPage() {
       await api.patch(`/auth/users/${editingUserId}`, {
         fullName: editingFullName.trim(),
         role: editingRole,
+        memberId: editingMemberId || null,
+        permissions: editingPermissions,
       });
 
       closeEditUser();
       setSuccess('Usuario actualizado correctamente.');
-      await loadUsers();
+      await loadData();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error al actualizar usuario');
     } finally {
@@ -196,7 +326,7 @@ export default function ConfiguracionPage() {
           ? 'Usuario desactivado correctamente.'
           : 'Usuario activado correctamente.',
       );
-      await loadUsers();
+      await loadData();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error al cambiar estado');
     } finally {
@@ -227,6 +357,48 @@ export default function ConfiguracionPage() {
     }
   }
 
+  function PermissionEditor({
+    permissions,
+    mode,
+  }: {
+    permissions: string[];
+    mode: 'create' | 'edit';
+  }) {
+    return (
+      <div className="space-y-4 rounded-2xl border border-ink/10 bg-ink/5 p-4 md:col-span-2">
+        <div>
+          <div className="text-sm font-semibold text-ink">Permisos</div>
+          <div className="mt-1 text-xs text-ink/60">
+            El administrador siempre tiene acceso total. Estos permisos aplican principalmente a usuarios socio.
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          {PERMISSION_GROUPS.map((group) => (
+            <div key={group.title} className="rounded-2xl bg-white p-3">
+              <div className="mb-3 text-xs font-bold uppercase tracking-wide text-ink/50">
+                {group.title}
+              </div>
+              <div className="space-y-2">
+                {group.items.map((item) => (
+                  <label key={item.key} className="flex items-start gap-2 text-sm text-ink/80">
+                    <input
+                      type="checkbox"
+                      checked={permissions.includes(item.key)}
+                      onChange={() => togglePermission(item.key, mode)}
+                      className="mt-1"
+                    />
+                    <span>{item.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   if (!isAdmin || !canEdit) {
     return (
       <SectionCard
@@ -244,7 +416,7 @@ export default function ConfiguracionPage() {
     <div className="space-y-6">
       <SectionCard
         title="Configuración"
-        description="Administración de usuarios, accesos y permisos del sistema."
+        description="Administración de usuarios, vínculos con socios y permisos del sistema."
       >
         <div className="grid gap-4 md:grid-cols-3">
           <div className="rounded-2xl border border-ink/10 bg-ink/5 p-4">
@@ -300,7 +472,7 @@ export default function ConfiguracionPage() {
 
       <SectionCard
         title="Usuarios del sistema"
-        description="Administrador tiene control total. Socio solo puede ver Dashboard y Cuadro, sin edición."
+        description="Asociá usuarios socio con un H.·. y definí permisos individuales."
       >
         {loading ? (
           <div className="py-8 text-sm text-ink/60">Cargando usuarios...</div>
@@ -316,6 +488,7 @@ export default function ConfiguracionPage() {
                   <th className="px-3 py-2">Usuario</th>
                   <th className="px-3 py-2">Email</th>
                   <th className="px-3 py-2">Rol</th>
+                  <th className="px-3 py-2">Socio vinculado</th>
                   <th className="px-3 py-2">Estado</th>
                   <th className="px-3 py-2">Último ingreso</th>
                   <th className="px-3 py-2">Acciones</th>
@@ -330,6 +503,9 @@ export default function ConfiguracionPage() {
                     <td className="px-3 py-3 text-ink/80">{item.email}</td>
                     <td className="px-3 py-3 text-ink/80">
                       {roleLabel(item.role)}
+                    </td>
+                    <td className="px-3 py-3 text-ink/80">
+                      {linkedMemberLabel(item.member)}
                     </td>
                     <td className="px-3 py-3">
                       <span
@@ -387,12 +563,12 @@ export default function ConfiguracionPage() {
 
       {showUserForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-3 py-4">
-          <div className="w-full max-w-2xl rounded-3xl bg-white p-5 shadow-2xl">
+          <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-3xl bg-white p-5 shadow-2xl">
             <div className="mb-5 flex items-start justify-between gap-4 border-b border-ink/10 pb-4">
               <div>
                 <h2 className="text-xl font-bold text-ink">Nuevo usuario</h2>
                 <p className="mt-1 text-sm text-ink/60">
-                  Creá usuarios administradores o socios.
+                  Creá usuarios administradores o socios vinculados al Cuadro.
                 </p>
               </div>
               <button
@@ -455,6 +631,26 @@ export default function ConfiguracionPage() {
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-ink/80">
+                  Socio vinculado
+                </label>
+                <select
+                  value={userForm.memberId}
+                  onChange={(e) =>
+                    setUserForm((prev) => ({ ...prev, memberId: e.target.value }))
+                  }
+                  className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                >
+                  <option value="">Sin vincular</option>
+                  {members.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {memberLabel(member)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-sm font-medium text-ink/80">
                   Contraseña inicial
                 </label>
                 <input
@@ -468,6 +664,8 @@ export default function ConfiguracionPage() {
                   className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
                 />
               </div>
+
+              <PermissionEditor permissions={userForm.permissions} mode="create" />
 
               <div className="md:col-span-2 flex gap-3">
                 <button
@@ -492,7 +690,7 @@ export default function ConfiguracionPage() {
 
       {editingUserId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-3 py-4">
-          <div className="w-full max-w-xl rounded-3xl bg-white p-5 shadow-2xl">
+          <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-3xl bg-white p-5 shadow-2xl">
             <div className="mb-5 flex items-start justify-between gap-4 border-b border-ink/10 pb-4">
               <div>
                 <h2 className="text-xl font-bold text-ink">Editar usuario</h2>
@@ -506,7 +704,7 @@ export default function ConfiguracionPage() {
               </button>
             </div>
 
-            <form onSubmit={handleEditUser} className="space-y-4">
+            <form onSubmit={handleEditUser} className="grid gap-4 md:grid-cols-2">
               <div>
                 <label className="mb-2 block text-sm font-medium text-ink/80">
                   Nombre completo
@@ -533,7 +731,27 @@ export default function ConfiguracionPage() {
                 </select>
               </div>
 
-              <div className="flex gap-3">
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-sm font-medium text-ink/80">
+                  Socio vinculado
+                </label>
+                <select
+                  value={editingMemberId}
+                  onChange={(e) => setEditingMemberId(e.target.value)}
+                  className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                >
+                  <option value="">Sin vincular</option>
+                  {members.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {memberLabel(member)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <PermissionEditor permissions={editingPermissions} mode="edit" />
+
+              <div className="md:col-span-2 flex gap-3">
                 <button
                   type="button"
                   onClick={closeEditUser}
