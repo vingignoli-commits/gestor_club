@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { SectionCard } from "../components/section-card";
 import { api } from "../lib/api";
+import { useAuth } from "../context/auth";
 
 type DashboardData = {
   people: {
@@ -564,6 +565,7 @@ function MiniColumnChart({
 }
 
 export default function HomePage() {
+  const { hasPermission } = useAuth();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -586,6 +588,7 @@ export default function HomePage() {
   );
 
   const debtors = data?.accounting.debtors ?? [];
+  const canSeeDebtList = hasPermission("debt:all");
   const birthdays = data?.people.birthdaysThisMonth ?? [];
   const expectedByCategory = data?.accounting.expectedByCategory ?? [];
   const monthlyCashHistory = data?.accounting.monthlyCashHistory ?? [];
@@ -633,7 +636,7 @@ export default function HomePage() {
             <div className="mt-6 grid gap-6 xl:grid-cols-2">
               <div className="rounded-2xl border border-ink/10 bg-white p-4">
                 <div className="mb-4 text-lg font-semibold text-ink">
-                  Cantidad de HH.·. por categoría
+                  Cantidad de HH.·. activos por categoría
                 </div>
                 <div className="space-y-3">
                   {sortedCategories.map((item) => (
@@ -650,7 +653,7 @@ export default function HomePage() {
 
               <div className="rounded-2xl border border-ink/10 bg-white p-4">
                 <div className="mb-4 text-lg font-semibold text-ink">
-                  Cantidad de HH.·. por grado
+                  Cantidad de HH.·. activos por grado
                 </div>
                 <div className="space-y-3">
                   {sortedGrades.map((item) => (
@@ -928,6 +931,7 @@ export default function HomePage() {
                 )}
               </div>
 
+              {canSeeDebtList && (
               <div className="rounded-2xl border border-ink/10 bg-white p-4">
                 <div className="mb-4 text-lg font-semibold text-ink">
                   HH.·. con deuda real
@@ -997,6 +1001,7 @@ export default function HomePage() {
                   </div>
                 )}
               </div>
+              )}
             </div>
           </SectionCard>
         </>
