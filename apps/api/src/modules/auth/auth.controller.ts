@@ -17,6 +17,11 @@ export class AuthController {
     return this.authService.me(authorization);
   }
 
+  @Get('me/profile')
+  myProfile(@Headers('authorization') authorization?: string) {
+    return this.authService.myProfile(authorization);
+  }
+
   @Post('recover-admin')
   recoverAdmin(
     @Body()
@@ -35,6 +40,11 @@ export class AuthController {
     return this.authService.listUsers();
   }
 
+  @Get('users/member-options')
+  listMembersForUserLinking() {
+    return this.authService.listMembersForUserLinking();
+  }
+
   @Post('users')
   createUser(
     @Body()
@@ -43,6 +53,8 @@ export class AuthController {
       fullName: string;
       role: UserRole;
       password: string;
+      memberId?: string | null;
+      permissions?: string[];
     },
   ) {
     return this.authService.createUser(dto);
@@ -56,9 +68,22 @@ export class AuthController {
       fullName?: string;
       role?: UserRole;
       isActive?: boolean;
+      memberId?: string | null;
+      permissions?: string[];
     },
   ) {
     return this.authService.updateUser(id, dto);
+  }
+
+  @Post('users/:id/permissions')
+  updateUserPermissions(
+    @Param('id') id: string,
+    @Body()
+    dto: {
+      permissions: string[];
+    },
+  ) {
+    return this.authService.updateUserPermissions(id, dto.permissions ?? []);
   }
 
   @Post('users/:id/reset-password')
