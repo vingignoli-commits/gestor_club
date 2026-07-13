@@ -39,7 +39,12 @@ const MONTHS_ES = [
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getExecutiveDashboard() {
+  /**
+   * @param includeDebtorDetails cuando es false se omite el padrón nominal de
+   * deudores (nombre, matrícula, teléfono, monto). Los agregados se mantienen:
+   * solo el detalle personal exige el permiso 'debt:all'.
+   */
+  async getExecutiveDashboard({ includeDebtorDetails }: { includeDebtorDetails: boolean }) {
     const today = new Date();
     const monthStart = startOfMonth(today);
     const nextMonthStart = addMonths(monthStart, 1);
@@ -396,7 +401,7 @@ export class DashboardService {
         currentMonthCollectionGap,
         collectionEffectiveness,
         operatingCashFlow: monthlyNet,
-        debtors,
+        debtors: includeDebtorDetails ? debtors : [],
         debtorsCount: debtors.length,
         debtorsPercentage:
           members.length > 0 ? (debtors.length / members.length) * 100 : 0,

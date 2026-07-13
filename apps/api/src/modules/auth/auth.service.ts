@@ -12,6 +12,12 @@ import {
   buildCurrentRatesMap,
   buildDebtSnapshot,
 } from "../members/member-debt.utils";
+import {
+  ALL_PERMISSIONS,
+  SOCIO_DEFAULT_PERMISSIONS,
+  resolvePermissions,
+} from "../../common/auth/permissions";
+import { signToken } from "../../common/auth/token";
 
 type AuthUser = {
   id: string;
@@ -48,35 +54,6 @@ type RecoverAdminDto = {
   password?: string;
   newPassword?: string;
 };
-
-const ALL_PERMISSIONS = [
-  "dashboard:read",
-  "dashboard:full",
-  "members:read",
-  "members:write",
-  "profile:own",
-  "debt:own",
-  "debt:all",
-  "treasury:read",
-  "treasury:write",
-  "cash:read",
-  "cash:write",
-  "reports:read",
-  "messaging:read",
-  "messaging:write",
-  "audit:read",
-  "settings:read",
-  "settings:write",
-] as const;
-
-const ADMIN_PERMISSIONS = [...ALL_PERMISSIONS];
-
-const SOCIO_DEFAULT_PERMISSIONS = [
-  "dashboard:read",
-  "members:read",
-  "profile:own",
-  "debt:own",
-];
 
 @Injectable()
 export class AuthService {
@@ -126,7 +103,7 @@ export class AuthService {
       memberId: user.memberId,
     };
 
-    const accessToken = this.signToken(authUser);
+    const accessToken = signToken(authUser);
 
     return {
       accessToken,
@@ -135,12 +112,9 @@ export class AuthService {
     };
   }
 
-  async me(authorization?: string) {
-    const token = this.extractBearerToken(authorization);
-    const payload = this.verifyToken(token);
-
+  async me(userId: string) {
     const user = await this.prisma.user.findUnique({
-      where: { id: payload.id },
+      where: { id: userId },
       include: { permissions: true },
     });
 
@@ -161,12 +135,9 @@ export class AuthService {
     );
   }
 
-  async myProfile(authorization?: string) {
-    const token = this.extractBearerToken(authorization);
-    const payload = this.verifyToken(token);
-
+  async myProfile(userId: string) {
     const user = await this.prisma.user.findUnique({
-      where: { id: payload.id },
+      where: { id: userId },
       include: { permissions: true },
     });
 
@@ -569,41 +540,6 @@ export class AuthService {
     return this.getPublicSystemUser(id);
   }
 
-  verifyToken(token: string) {
-    const secret = this.getTokenSecret();
-    const [payloadEncoded, signature] = token.split(".");
-
-    if (!payloadEncoded || !signature) {
-      throw new UnauthorizedException("Token inválido.");
-    }
-
-    const expectedSignature = createHmac("sha256", secret)
-      .update(payloadEncoded)
-      .digest("base64url");
-
-    const valid = this.safeCompare(signature, expectedSignature);
-
-    if (!valid) {
-      throw new UnauthorizedException("Token inválido.");
-    }
-
-    const payload = JSON.parse(
-      Buffer.from(payloadEncoded, "base64url").toString("utf8"),
-    ) as AuthUser & { exp: number };
-
-    if (payload.exp < Date.now()) {
-      throw new UnauthorizedException("Sesión vencida.");
-    }
-
-    return {
-      id: payload.id,
-      email: payload.email,
-      fullName: payload.fullName,
-      role: payload.role,
-      memberId: payload.memberId ?? null,
-    };
-  }
-
   private async ensureMemberCanBeLinked(
     memberId: string,
     currentUserId?: string,
@@ -680,17 +616,7 @@ export class AuthService {
     role: UserRole,
     permissionRows: Array<{ key: string; enabled: boolean }> = [],
   ) {
-    if (role === UserRole.ADMIN) return ADMIN_PERMISSIONS;
-
-    const validRows = permissionRows.filter((row) =>
-      ALL_PERMISSIONS.includes(row.key as (typeof ALL_PERMISSIONS)[number]),
-    );
-
-    if (validRows.length === 0) {
-      return SOCIO_DEFAULT_PERMISSIONS;
-    }
-
-    return validRows.filter((row) => row.enabled).map((row) => row.key);
+    return resolvePermissions(role, permissionRows);
   }
 
   private async replaceUserPermissions(userId: string, permissions: string[]) {
@@ -724,48 +650,6 @@ export class AuthService {
     }
 
     return Math.max(0, years);
-  }
-
-  private extractBearerToken(authorization?: string) {
-    if (!authorization) {
-      throw new UnauthorizedException("Falta token de sesión.");
-    }
-
-    const [type, token] = authorization.split(" ");
-
-    if (type !== "Bearer" || !token) {
-      throw new UnauthorizedException("Token de sesión inválido.");
-    }
-
-    return token;
-  }
-
-  private signToken(user: AuthUser) {
-    const secret = this.getTokenSecret();
-    const payload = {
-      ...user,
-      exp: Date.now() + 1000 * 60 * 60 * 24 * 7,
-    };
-
-    const payloadEncoded = Buffer.from(JSON.stringify(payload)).toString(
-      "base64url",
-    );
-
-    const signature = createHmac("sha256", secret)
-      .update(payloadEncoded)
-      .digest("base64url");
-
-    return `${payloadEncoded}.${signature}`;
-  }
-
-  private getTokenSecret() {
-    const secret = process.env.AUTH_TOKEN_SECRET;
-
-    if (!secret) {
-      throw new BadRequestException("AUTH_TOKEN_SECRET no está configurada.");
-    }
-
-    return secret;
   }
 
   private hashPassword(password: string) {

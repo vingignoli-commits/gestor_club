@@ -1,5 +1,11 @@
-import { Body, Controller, Get, Headers, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
+import {
+  CurrentUser,
+  Public,
+  RequestUser,
+  RequirePermissions,
+} from '../../common/auth/auth.decorators';
 import { LoginDto } from './dto/login.dto';
 import { AuthService } from './auth.service';
 
@@ -7,21 +13,23 @@ import { AuthService } from './auth.service';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @Public()
   @Post('login')
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
   }
 
   @Get('me')
-  me(@Headers('authorization') authorization?: string) {
-    return this.authService.me(authorization);
+  me(@CurrentUser() user: RequestUser) {
+    return this.authService.me(user.id);
   }
 
   @Get('me/profile')
-  myProfile(@Headers('authorization') authorization?: string) {
-    return this.authService.myProfile(authorization);
+  myProfile(@CurrentUser() user: RequestUser) {
+    return this.authService.myProfile(user.id);
   }
 
+  @Public()
   @Post('recover-admin')
   recoverAdmin(
     @Body()
@@ -35,21 +43,25 @@ export class AuthController {
     return this.authService.recoverAdmin(dto);
   }
 
+  @RequirePermissions('settings:read')
   @Get('users')
   listUsers() {
     return this.authService.listUsers();
   }
 
+  @RequirePermissions('settings:read')
   @Get('users/member-options')
   listMembersForUserLinking() {
     return this.authService.listMembersForUserLinking();
   }
 
+  @RequirePermissions('settings:write')
   @Post('users/create-member-accesses')
   createMemberAccesses() {
     return this.authService.createMemberAccesses();
   }
 
+  @RequirePermissions('settings:write')
   @Post('users')
   createUser(
     @Body()
@@ -65,6 +77,7 @@ export class AuthController {
     return this.authService.createUser(dto);
   }
 
+  @RequirePermissions('settings:write')
   @Patch('users/:id')
   updateUser(
     @Param('id') id: string,
@@ -80,6 +93,7 @@ export class AuthController {
     return this.authService.updateUser(id, dto);
   }
 
+  @RequirePermissions('settings:write')
   @Post('users/:id/permissions')
   updateUserPermissions(
     @Param('id') id: string,
@@ -91,6 +105,7 @@ export class AuthController {
     return this.authService.updateUserPermissions(id, dto.permissions ?? []);
   }
 
+  @RequirePermissions('settings:write')
   @Post('users/:id/reset-password')
   resetUserPassword(
     @Param('id') id: string,

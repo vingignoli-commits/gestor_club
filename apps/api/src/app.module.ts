@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
 
+import { AccessGuard } from './common/auth/access.guard';
 import { AuthModule } from './modules/auth/auth.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { CashModule } from './modules/cash/cash.module';
@@ -25,6 +27,13 @@ import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
     ReportsModule,
     AuditModule,
     WhatsappModule,
+  ],
+  providers: [
+    // Cierra la API por defecto: todo endpoint exige token salvo @Public().
+    {
+      provide: APP_GUARD,
+      useClass: AccessGuard,
+    },
   ],
 })
 export class AppModule {}

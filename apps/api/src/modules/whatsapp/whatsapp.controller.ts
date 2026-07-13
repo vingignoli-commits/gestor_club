@@ -1,7 +1,9 @@
 import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { RequirePermissions } from '../../common/auth/auth.decorators';
 import { WhatsappService } from './whatsapp.service';
 
 @Controller('whatsapp')
+@RequirePermissions('messaging:read')
 export class WhatsappController {
   constructor(private readonly whatsappService: WhatsappService) {}
 
@@ -10,11 +12,13 @@ export class WhatsappController {
     return this.whatsappService.getTemplates();
   }
 
+  @RequirePermissions('messaging:write')
   @Post('templates')
   createTemplate(@Body() body: { name: string; body: string }) {
     return this.whatsappService.createTemplate(body.name, body.body);
   }
 
+  @RequirePermissions('messaging:write')
   @Patch('templates/:id')
   updateTemplate(
     @Param('id') id: string,
@@ -43,6 +47,7 @@ export class WhatsappController {
     return this.whatsappService.getInitialNoticeCampaign();
   }
 
+  @RequirePermissions('messaging:write')
   @Post('campaigns/initial-notice/mark-sent')
   markInitialNoticeSent(@Body() body: { memberId: string }) {
     return this.whatsappService.markCampaignSent('initial-notice', body.memberId);
@@ -53,11 +58,13 @@ export class WhatsappController {
     return this.whatsappService.getReminderCampaign();
   }
 
+  @RequirePermissions('messaging:write')
   @Post('campaigns/reminder/mark-sent')
   markReminderSent(@Body() body: { memberId: string }) {
     return this.whatsappService.markCampaignSent('reminder', body.memberId);
   }
 
+  @RequirePermissions('messaging:write')
   @Post('send')
   send(
     @Body()
