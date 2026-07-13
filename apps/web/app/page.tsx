@@ -568,11 +568,22 @@ export default function HomePage() {
   const { hasPermission } = useAuth();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     api
       .get<DashboardData>("/dashboard/executive")
-      .then(setData)
+      .then((res) => {
+        setData(res);
+        setError(null);
+      })
+      .catch((err: unknown) => {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "No se pudo cargar el dashboard.",
+        );
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -595,9 +606,18 @@ export default function HomePage() {
 
   return (
     <div className="space-y-6">
-      {loading || !data ? (
+      {loading ? (
         <SectionCard title="Dashboard" description="Cargando información">
           <div className="py-8 text-sm text-ink/60">Cargando dashboard...</div>
+        </SectionCard>
+      ) : !data ? (
+        <SectionCard
+          title="Dashboard"
+          description="No se pudo cargar la información"
+        >
+          <div className="py-8 text-sm text-rose-700">
+            {error ?? "No se pudo cargar el dashboard."}
+          </div>
         </SectionCard>
       ) : (
         <>

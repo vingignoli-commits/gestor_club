@@ -10,6 +10,11 @@ import {
   ReactNode,
 } from 'react';
 import { api } from '../lib/api';
+import {
+  canAccessPath,
+  hasPermission as checkPermission,
+  resolveLandingPath,
+} from '../lib/permissions';
 
 type UserRole = 'ADMIN' | 'SOCIO';
 
@@ -37,26 +42,10 @@ type AuthCtx = {
   logout: () => void;
   canAccess: (pathname: string) => boolean;
   hasPermission: (permission: string) => boolean;
+  landingPath: string | null;
 };
 
 const AuthContext = createContext<AuthCtx | null>(null);
-
-const PATH_PERMISSIONS: Record<string, string> = {
-  '/': 'dashboard:read',
-  '/socios': 'members:read',
-  '/mi-perfil': 'profile:own',
-  '/tesoreria': 'treasury:read',
-  '/caja': 'cash:read',
-  '/reportes': 'reports:read',
-  '/mensajeria': 'messaging:read',
-  '/auditoria': 'audit:read',
-  '/configuracion': 'settings:read',
-};
-
-function normalizePath(pathname: string) {
-  if (pathname === '/') return '/';
-  return `/${pathname.split('/').filter(Boolean)[0] ?? ''}`;
-}
 
 function clearStoredAuth() {
   localStorage.removeItem('accessToken');
@@ -111,28 +100,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const hasPermission = useCallback(
-    (permission: string) => {
-      if (!user) return false;
-      if (user.role === 'ADMIN') return true;
-      return user.permissions.includes(permission);
-    },
+    (permission: string) => checkPermission(user, permission),
     [user],
   );
 
   const canAccess = useCallback(
-    (pathname: string) => {
-      if (!user) return false;
-
-      const base = normalizePath(pathname);
-      const permission = PATH_PERMISSIONS[base];
-
-      if (!permission) return false;
-      if (user.role === 'ADMIN') return true;
-
-      return user.permissions.includes(permission);
-    },
+    (pathname: string) => canAccessPath(user, pathname),
     [user],
   );
+
+  // Primera pantalla a la que el usuario tiene acceso real.
+  // Es null cuando no tiene permiso para ninguna sección.
+  const landingPath = useMemo(() => resolveLandingPath(user), [user]);
 
   const value = useMemo<AuthCtx>(
     () => ({
@@ -143,8 +122,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logout,
       canAccess,
       hasPermission,
+      landingPath,
     }),
-    [user, loading, canAccess, hasPermission],
+    [user, loading, canAccess, hasPermission, landingPath],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
