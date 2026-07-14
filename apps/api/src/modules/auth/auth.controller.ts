@@ -6,6 +6,7 @@ import {
   RequestUser,
   RequirePermissions,
 } from '../../common/auth/auth.decorators';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { AuthService } from './auth.service';
 
@@ -27,6 +28,17 @@ export class AuthController {
   @Get('me/profile')
   myProfile(@CurrentUser() user: RequestUser) {
     return this.authService.myProfile(user.id);
+  }
+
+  // Sin @RequirePermissions: cualquier usuario autenticado puede cambiar su
+  // propia contraseña. Siempre opera sobre el id del token, nunca sobre uno
+  // recibido por parámetro.
+  @Post('me/password')
+  changeOwnPassword(
+    @CurrentUser() user: RequestUser,
+    @Body() dto: ChangePasswordDto,
+  ) {
+    return this.authService.changeOwnPassword(user.id, dto);
   }
 
   @Public()

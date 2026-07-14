@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { SectionCard } from "../../components/section-card";
 import { api } from "../../lib/api";
 
@@ -118,6 +118,137 @@ function gradeLabel(value: string | null) {
   return GRADE_LABELS[value] ?? value;
 }
 
+function ChangePasswordCard() {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [repeatPassword, setRepeatPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const inputClass =
+    "w-full rounded-2xl border border-ink/10 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-accent";
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    setSuccess("");
+
+    if (newPassword.length < 8) {
+      setError("La contraseña nueva debe tener al menos 8 caracteres.");
+      return;
+    }
+
+    if (newPassword !== repeatPassword) {
+      setError("La contraseña nueva y su repetición no coinciden.");
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      await api.post("/auth/me/password", { currentPassword, newPassword });
+      setSuccess("Contraseña actualizada.");
+      setCurrentPassword("");
+      setNewPassword("");
+      setRepeatPassword("");
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No se pudo cambiar la contraseña.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <SectionCard
+      title="Cambiar contraseña"
+      description="Para cambiarla necesitás escribir tu contraseña actual."
+    >
+      <form onSubmit={handleSubmit} className="max-w-md space-y-3">
+        <div>
+          <label
+            htmlFor="currentPassword"
+            className="mb-1 block text-xs uppercase tracking-wide text-ink/50"
+          >
+            Contraseña actual
+          </label>
+          <input
+            id="currentPassword"
+            type="password"
+            autoComplete="current-password"
+            required
+            value={currentPassword}
+            onChange={(event) => setCurrentPassword(event.target.value)}
+            className={inputClass}
+          />
+        </div>
+
+        <div>
+          <label
+            htmlFor="newPassword"
+            className="mb-1 block text-xs uppercase tracking-wide text-ink/50"
+          >
+            Contraseña nueva
+          </label>
+          <input
+            id="newPassword"
+            type="password"
+            autoComplete="new-password"
+            required
+            minLength={8}
+            value={newPassword}
+            onChange={(event) => setNewPassword(event.target.value)}
+            className={inputClass}
+          />
+          <div className="mt-1 text-xs text-ink/50">Mínimo 8 caracteres.</div>
+        </div>
+
+        <div>
+          <label
+            htmlFor="repeatPassword"
+            className="mb-1 block text-xs uppercase tracking-wide text-ink/50"
+          >
+            Repetir contraseña nueva
+          </label>
+          <input
+            id="repeatPassword"
+            type="password"
+            autoComplete="new-password"
+            required
+            value={repeatPassword}
+            onChange={(event) => setRepeatPassword(event.target.value)}
+            className={inputClass}
+          />
+        </div>
+
+        {error && (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+            {error}
+          </div>
+        )}
+
+        {success && (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            {success}
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={saving}
+          className="rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
+        >
+          {saving ? "Guardando..." : "Cambiar contraseña"}
+        </button>
+      </form>
+    </SectionCard>
+  );
+}
+
 export default function MiPerfilPage() {
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -153,12 +284,18 @@ export default function MiPerfilPage() {
   }
 
   if (error || !profile) {
+    // Aunque la ficha no cargue (p. ej. usuario sin socio vinculado), el
+    // cambio de contraseña tiene que seguir disponible.
     return (
-      <SectionCard title="Mi Perfil" description="Ficha personal del usuario.">
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          {error || "No hay información disponible."}
-        </div>
-      </SectionCard>
+      <div className="space-y-6">
+        <SectionCard title="Mi Perfil" description="Ficha personal del usuario.">
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            {error || "No hay información disponible."}
+          </div>
+        </SectionCard>
+
+        <ChangePasswordCard />
+      </div>
     );
   }
 
@@ -471,6 +608,8 @@ export default function MiPerfilPage() {
           )}
         </SectionCard>
       </div>
+
+      <ChangePasswordCard />
     </div>
   );
 }

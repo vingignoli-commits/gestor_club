@@ -8,6 +8,7 @@ import { PaymentStatus, UserRole } from "@prisma/client";
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { PrismaService } from "../prisma/prisma.service";
 import { LoginDto } from "./dto/login.dto";
+import { ChangePasswordDto } from "./dto/change-password.dto";
 import {
   buildCurrentRatesMap,
   buildDebtSnapshot,
@@ -509,6 +510,56 @@ export class AuthService {
       skippedLinkedMember,
       password: "progreso",
     };
+  }
+
+  /**
+   * Cambio de contraseña por el propio usuario: exige conocer la actual, así
+   * un token robado no alcanza para secuestrar la cuenta.
+   */
+  async changeOwnPassword(userId: string, dto: ChangePasswordDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException("Sesión inválida.");
+    }
+
+    const currentPassword = dto.currentPassword.trim();
+    const newPassword = dto.newPassword.trim();
+
+    const validPassword = this.verifyPassword(
+      currentPassword,
+      user.passwordSalt,
+      user.passwordHash,
+    );
+
+    if (!validPassword) {
+      throw new UnauthorizedException("La contraseña actual no es correcta.");
+    }
+
+    if (!this.isStrongEnoughPassword(newPassword)) {
+      throw new BadRequestException(
+        "La contraseña nueva debe tener al menos 8 caracteres.",
+      );
+    }
+
+    if (newPassword === currentPassword) {
+      throw new BadRequestException(
+        "La contraseña nueva debe ser distinta de la actual.",
+      );
+    }
+
+    const passwordData = this.hashPassword(newPassword);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        passwordHash: passwordData.hash,
+        passwordSalt: passwordData.salt,
+        updatedAt: new Date(),
+      },
+    });
+
+    return { changed: true };
   }
 
   async resetUserPassword(id: string, dto: ResetPasswordDto) {
