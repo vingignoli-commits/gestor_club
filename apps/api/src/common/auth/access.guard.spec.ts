@@ -136,17 +136,18 @@ describe('AccessGuard (API cerrada por defecto)', () => {
       expect(getExecutiveDashboard).not.toHaveBeenCalled();
     });
 
+    // Endpoints que hoy en producción responden 200 sin token.
     it.each([
-      ['get', '/api/v1/members'],
-      ['get', '/api/v1/reports/debtors'],
-      ['get', '/api/v1/cash/summary'],
-      ['get', '/api/v1/payments'],
-      ['get', '/api/v1/audit-logs'],
-      ['get', '/api/v1/whatsapp/templates'],
-      ['get', '/api/v1/auth/users'],
-      ['get', '/api/v1/auth/me'],
-    ])('rechaza %s %s con 401', async (method, path) => {
-      await request(app.getHttpServer())[method](path).expect(401);
+      '/api/v1/members',
+      '/api/v1/reports/debtors',
+      '/api/v1/cash/summary',
+      '/api/v1/payments',
+      '/api/v1/audit-logs',
+      '/api/v1/whatsapp/templates',
+      '/api/v1/auth/users',
+      '/api/v1/auth/me',
+    ])('rechaza GET %s con 401', async (path) => {
+      await request(app.getHttpServer()).get(path).expect(401);
     });
 
     it('rechaza la creación de usuarios con 401 (escalada de privilegios)', async () => {
