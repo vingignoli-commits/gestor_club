@@ -16,6 +16,9 @@ model User {
   passwordHash String
   passwordSalt String
   isActive     Boolean          @default(true)
+  // true mientras el usuario siga con la contraseña que le asignó un tercero
+  // (alta masiva o reseteo por un ADMIN). Vuelve a false cuando la cambia él.
+  mustChangePassword Boolean    @default(false)
   lastLoginAt  DateTime?
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt

@@ -24,6 +24,7 @@ const socio = {
   role: UserRole.SOCIO,
   memberId: 'member-1',
   isActive: true,
+  mustChangePassword: true,
   passwordSalt: SALT,
   passwordHash: hash(CURRENT_PASSWORD),
   permissions: [{ key: 'profile:own', enabled: true }],
@@ -100,6 +101,8 @@ describe('POST /auth/me/password', () => {
     expect(JSON.stringify(data)).not.toContain('clave-nueva-larga');
     // El hash guardado corresponde a la contraseña nueva.
     expect(data.passwordHash).toBe(hash('clave-nueva-larga', data.passwordSalt));
+    // Ya la eligió el usuario: deja de exigírsele el cambio.
+    expect(data.mustChangePassword).toBe(false);
   });
 
   it('rechaza sin token', async () => {

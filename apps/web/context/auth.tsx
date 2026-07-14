@@ -26,6 +26,8 @@ type User = {
   memberId: string | null;
   isActive: boolean;
   permissions: string[];
+  // true mientras conserve una contraseña que le asignó un tercero.
+  mustChangePassword?: boolean;
 };
 
 type LoginResponse = {
@@ -43,6 +45,7 @@ type AuthCtx = {
   canAccess: (pathname: string) => boolean;
   hasPermission: (permission: string) => boolean;
   landingPath: string | null;
+  refreshUser: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthCtx | null>(null);
@@ -99,6 +102,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }
 
+  const refreshUser = useCallback(async () => {
+    const fresh = await api.get<User>('/auth/me');
+    setUser(fresh);
+  }, []);
+
   const hasPermission = useCallback(
     (permission: string) => checkPermission(user, permission),
     [user],
@@ -123,8 +131,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       canAccess,
       hasPermission,
       landingPath,
+      refreshUser,
     }),
-    [user, loading, canAccess, hasPermission, landingPath],
+    [user, loading, canAccess, hasPermission, landingPath, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

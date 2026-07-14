@@ -56,6 +56,12 @@ type RecoverAdminDto = {
   newPassword?: string;
 };
 
+/**
+ * Contraseña que el alta masiva le asigna a todos los accesos nuevos. Es
+ * compartida y conocida: a quien siga usándola se le exige cambiarla.
+ */
+const DEFAULT_SHARED_PASSWORD = "progreso";
+
 @Injectable()
 export class AuthService {
   constructor(private readonly prisma: PrismaService) {}
@@ -91,9 +97,20 @@ export class AuthService {
       throw new UnauthorizedException("Usuario o contraseña incorrectos");
     }
 
+    // Los accesos del alta masiva anteriores a este cambio no quedaron
+    // marcados en la base, y desde ahí no hay forma de distinguirlos. Acá sí:
+    // el login es el único punto donde vemos la contraseña en claro.
+    const usesSharedPassword = dto.password === DEFAULT_SHARED_PASSWORD;
+    const mustChangePassword = user.mustChangePassword || usesSharedPassword;
+
     await this.prisma.user.update({
       where: { id: user.id },
-      data: { lastLoginAt: new Date() },
+      data: {
+        lastLoginAt: new Date(),
+        ...(mustChangePassword !== user.mustChangePassword
+          ? { mustChangePassword }
+          : {}),
+      },
     });
 
     const authUser: AuthUser = {
@@ -109,7 +126,12 @@ export class AuthService {
     return {
       accessToken,
       token: accessToken,
-      user: this.publicUser(authUser, user.isActive, user.permissions),
+      user: this.publicUser(
+        authUser,
+        user.isActive,
+        user.permissions,
+        mustChangePassword,
+      ),
     };
   }
 
@@ -133,6 +155,7 @@ export class AuthService {
       },
       user.isActive,
       user.permissions,
+      user.mustChangePassword,
     );
   }
 
@@ -486,7 +509,7 @@ export class AuthService {
         continue;
       }
 
-      const passwordData = this.hashPassword("progreso");
+      const passwordData = this.hashPassword(DEFAULT_SHARED_PASSWORD);
       const user = await this.prisma.user.create({
         data: {
           email,
@@ -496,6 +519,8 @@ export class AuthService {
           passwordHash: passwordData.hash,
           passwordSalt: passwordData.salt,
           isActive: true,
+          // Nace con la clave compartida: se le exige cambiarla al entrar.
+          mustChangePassword: true,
         },
       });
 
@@ -508,7 +533,7 @@ export class AuthService {
       skippedWithoutEmail,
       skippedExistingEmail,
       skippedLinkedMember,
-      password: "progreso",
+      password: DEFAULT_SHARED_PASSWORD,
     };
   }
 
@@ -555,6 +580,8 @@ export class AuthService {
       data: {
         passwordHash: passwordData.hash,
         passwordSalt: passwordData.salt,
+        // La eligió el propio usuario: ya no hay nada que exigirle.
+        mustChangePassword: false,
         updatedAt: new Date(),
       },
     });
@@ -582,6 +609,8 @@ export class AuthService {
     await this.prisma.user.update({
       where: { id },
       data: {
+        // La eligió un ADMIN, no el usuario: se le exige cambiarla al entrar.
+        mustChangePassword: true,
         passwordHash: passwordData.hash,
         passwordSalt: passwordData.salt,
         updatedAt: new Date(),
@@ -651,6 +680,7 @@ export class AuthService {
     user: AuthUser,
     isActive: boolean,
     permissionRows: Array<{ key: string; enabled: boolean }> = [],
+    mustChangePassword = false,
   ) {
     return {
       id: user.id,
@@ -659,6 +689,7 @@ export class AuthService {
       role: user.role,
       memberId: user.memberId,
       isActive,
+      mustChangePassword,
       permissions: this.permissionsForUser(user.role, permissionRows),
     };
   }

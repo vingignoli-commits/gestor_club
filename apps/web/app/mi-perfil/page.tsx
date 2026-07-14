@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { SectionCard } from "../../components/section-card";
+import { useAuth } from "../../context/auth";
 import { api } from "../../lib/api";
 
 type ProfileResponse = {
@@ -119,12 +120,16 @@ function gradeLabel(value: string | null) {
 }
 
 function ChangePasswordCard() {
+  const { user, refreshUser } = useAuth();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [repeatPassword, setRepeatPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  // Solo lo ve quien todavía conserva la contraseña que le asignó un tercero.
+  const mustChange = user?.mustChangePassword === true;
 
   const inputClass =
     "w-full rounded-2xl border border-ink/10 bg-white px-4 py-3 text-sm text-ink outline-none focus:border-accent";
@@ -152,6 +157,8 @@ function ChangePasswordCard() {
       setCurrentPassword("");
       setNewPassword("");
       setRepeatPassword("");
+      // Refresca el usuario para que el aviso de primer ingreso desaparezca.
+      await refreshUser().catch(() => undefined);
     } catch (err: unknown) {
       setError(
         err instanceof Error
@@ -168,6 +175,17 @@ function ChangePasswordCard() {
       title="Cambiar contraseña"
       description="Para cambiarla necesitás escribir tu contraseña actual."
     >
+      {mustChange && (
+        <div className="mb-5 rounded-2xl border border-accent/20 bg-accent/10 px-5 py-4 text-sm leading-relaxed text-ink">
+          <div className="font-semibold">Hola Q.·.H.·.</div>
+          <p className="mt-1 text-ink/80">
+            Este es tu primer ingreso. Por eso te pido que cambies tu
+            contraseña, ya que la actual es compartida y la conocen otros HH.·.
+          </p>
+          <div className="mt-2 font-semibold">Fuerte T.·.A.·.F.·.</div>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="max-w-md space-y-3">
         <div>
           <label
