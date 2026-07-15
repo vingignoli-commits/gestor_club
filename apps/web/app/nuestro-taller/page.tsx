@@ -19,6 +19,9 @@ type TallerData = {
   birthdays: Array<{
     id: string;
     fullName: string;
+    firstName: string;
+    grade: string | null;
+    phone: string | null;
     date: string;
     day: number;
     month: number;
@@ -26,6 +29,23 @@ type TallerData = {
     turningAge: number;
   }>;
 };
+
+type Birthday = TallerData["birthdays"][number];
+
+function birthdayWhatsappLink(member: Birthday): string | null {
+  if (!member.phone) return null;
+
+  const celular = member.phone.replace(/\D/g, "");
+  if (!celular) return null;
+
+  const saludo = member.grade === "MAESTRO" ? "V.·.H.·." : "Q.·.H.·.";
+  const texto =
+    `¡Feliz cumpleaños, ${saludo} ${member.firstName}! 🎂 En este día tan especial, ` +
+    `todo el Taller te abraza fraternalmente y te desea salud, fuerza y unión. ` +
+    `Que el G.·.A.·.D.·.U.·. te colme de bendiciones.`;
+
+  return `https://wa.me/${celular}?text=${encodeURIComponent(texto)}`;
+}
 
 type Announcement = {
   id: string;
@@ -221,7 +241,7 @@ export default function NuestroTallerPage() {
 
       <SectionCard
         title="Composición del taller"
-        description="Cantidad de HH.·. activos por grado. Los Maestros de Honor se cuentan aparte y no suman al total de Maestros."
+        description="Cantidad de HH.·. por grado"
       >
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
           <GradeTile
@@ -247,7 +267,7 @@ export default function NuestroTallerPage() {
           />
           <GradeTile
             abbr="MdH.·."
-            meaning="Maestros de Honor"
+            meaning="Miembros de Honor"
             value={data.grades.mastersOfHonor}
           />
         </div>
@@ -265,9 +285,9 @@ export default function NuestroTallerPage() {
               hint="Promedio de edad de los HH.·. activos"
             />
             <MetricCard
-              label="Antigüedad promedio"
+              label="Antigüedad masónica"
               value={`${data.averageSeniority.toFixed(1)} años`}
-              hint="Promedio de años desde la iniciación"
+              hint="Promedio de años desde la fecha de iniciación"
             />
           </div>
         </SectionCard>
@@ -289,30 +309,74 @@ export default function NuestroTallerPage() {
             No hay cumpleaños en los próximos 30 días.
           </p>
         ) : (
-          <ul className="divide-y divide-ink/10">
-            {data.birthdays.map((member) => (
-              <li
-                key={member.id}
-                className="flex flex-wrap items-center justify-between gap-2 py-3"
-              >
-                <div className="min-w-0">
-                  <div className="font-medium text-ink">{member.fullName}</div>
-                  <div className="text-sm text-ink/50">
-                    {formatBirthday(member.date)} · cumple {member.turningAge}
+          <div className="space-y-2">
+            {data.birthdays.map((member) => {
+              if (member.daysUntil === 0) {
+                const waLink = birthdayWhatsappLink(member);
+
+                return (
+                  <div
+                    key={member.id}
+                    className="rounded-2xl border border-accent/30 bg-accent/5 p-4"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">🎂</span>
+                          <span className="font-semibold text-accent">
+                            ¡Felicitá a nuestro H.·.!
+                          </span>
+                        </div>
+                        <div className="mt-1 font-medium text-ink">
+                          {member.fullName}
+                        </div>
+                        <div className="text-sm text-ink/60">
+                          Hoy cumple {member.turningAge} años
+                        </div>
+                      </div>
+                      {waLink ? (
+                        <a
+                          href={waLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 rounded-2xl bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90"
+                        >
+                          Saludar por WhatsApp
+                        </a>
+                      ) : (
+                        <span className="shrink-0 text-xs text-ink/40">
+                          Sin teléfono cargado
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <span
-                  className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
-                    member.daysUntil <= 1
-                      ? "bg-accent/15 text-accent"
-                      : "bg-ink/5 text-ink/60"
-                  }`}
+                );
+              }
+
+              return (
+                <div
+                  key={member.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-ink/10 bg-white px-4 py-3"
                 >
-                  {birthdayLabel(member.daysUntil)}
-                </span>
-              </li>
-            ))}
-          </ul>
+                  <div className="min-w-0">
+                    <div className="font-medium text-ink">{member.fullName}</div>
+                    <div className="text-sm text-ink/50">
+                      {formatBirthday(member.date)} · cumple {member.turningAge}
+                    </div>
+                  </div>
+                  <span
+                    className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
+                      member.daysUntil === 1
+                        ? "bg-accent/15 text-accent"
+                        : "bg-ink/5 text-ink/60"
+                    }`}
+                  >
+                    {birthdayLabel(member.daysUntil)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         )}
       </SectionCard>
 

@@ -461,6 +461,7 @@ export class DashboardService {
         lastName: true,
         grade: true,
         category: true,
+        phone: true,
         birthDate: true,
         initiationDate: true,
       },
@@ -528,6 +529,9 @@ export class DashboardService {
         return {
           id: member.id,
           fullName: `${member.lastName}, ${member.firstName}`,
+          firstName: member.firstName,
+          grade: member.grade,
+          phone: member.phone,
           date: next.toISOString(),
           day: birthDate.getUTCDate(),
           month: birthDate.getUTCMonth() + 1,
