@@ -443,6 +443,158 @@ export class DashboardService {
       },
     };
   }
+
+  /**
+   * Tablero "Nuestro Taller": métricas de comunidad y transparencia (no
+   * económicas) pensadas para los socios. Grados normalizados a APRENDIZ /
+   * COMPANERO / MAESTRO; la categoría HONOR se cuenta aparte (Maestros de
+   * Honor) y se excluye del conteo de Maestros.
+   */
+  async getTallerDashboard() {
+    const today = new Date();
+
+    const members = await this.prisma.member.findMany({
+      where: { status: MemberStatus.ACTIVE },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        grade: true,
+        category: true,
+        birthDate: true,
+        initiationDate: true,
+      },
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+    });
+
+    const normalizeGrade = (grade: string | null) =>
+      (grade ?? "").trim().toUpperCase();
+
+    let masters = 0;
+    let fellows = 0;
+    let apprentices = 0;
+    let mastersOfHonor = 0;
+
+    let ageSum = 0;
+    let ageCount = 0;
+    let senioritySum = 0;
+    let seniorityCount = 0;
+
+    const generationsMap = new Map<string, number>();
+
+    for (const member of members) {
+      const grade = normalizeGrade(member.grade);
+      const isHonor = member.category === MemberCategory.HONOR;
+
+      if (isHonor) {
+        mastersOfHonor += 1;
+      } else if (grade === "MAESTRO") {
+        masters += 1;
+      }
+
+      if (grade === "COMPANERO") fellows += 1;
+      if (grade === "APRENDIZ") apprentices += 1;
+
+      if (member.birthDate) {
+        ageSum += calculateAge(member.birthDate, today);
+        ageCount += 1;
+
+        const generation = resolveGeneration(member.birthDate.getUTCFullYear());
+        generationsMap.set(
+          generation,
+          (generationsMap.get(generation) ?? 0) + 1,
+        );
+      }
+
+      if (member.initiationDate) {
+        senioritySum += calculateAge(member.initiationDate, today);
+        seniorityCount += 1;
+      }
+    }
+
+    const generations = GENERATION_ORDER.filter((label) =>
+      generationsMap.has(label),
+    ).map((label) => ({ label, count: generationsMap.get(label) ?? 0 }));
+
+    const birthdays = members
+      .filter((member) => member.birthDate)
+      .map((member) => {
+        const birthDate = member.birthDate!;
+        const next = nextBirthday(birthDate, today);
+        const daysUntil = Math.round(
+          (next.getTime() - startOfDayUtc(today).getTime()) / 86_400_000,
+        );
+
+        return {
+          id: member.id,
+          fullName: `${member.lastName}, ${member.firstName}`,
+          date: next.toISOString(),
+          day: birthDate.getUTCDate(),
+          month: birthDate.getUTCMonth() + 1,
+          daysUntil,
+          turningAge: calculateAge(birthDate, today) + (daysUntil > 0 ? 1 : 0),
+        };
+      })
+      .filter((item) => item.daysUntil >= 0 && item.daysUntil <= 30)
+      .sort((a, b) => a.daysUntil - b.daysUntil);
+
+    return {
+      activeMembers: members.length,
+      grades: {
+        masters,
+        fellows,
+        apprentices,
+        mastersOfHonor,
+      },
+      averageAge: ageCount > 0 ? ageSum / ageCount : 0,
+      averageSeniority: seniorityCount > 0 ? senioritySum / seniorityCount : 0,
+      generations,
+      birthdays,
+    };
+  }
+}
+
+const GENERATION_ORDER = [
+  "Anteriores",
+  "Baby Boomers",
+  "Generación X",
+  "Millennials",
+  "Generación Z",
+  "Generación Alpha",
+];
+
+function resolveGeneration(year: number): string {
+  if (year >= 2013) return "Generación Alpha";
+  if (year >= 1997) return "Generación Z";
+  if (year >= 1981) return "Millennials";
+  if (year >= 1965) return "Generación X";
+  if (year >= 1946) return "Baby Boomers";
+  return "Anteriores";
+}
+
+function startOfDayUtc(date: Date): Date {
+  return new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+  );
+}
+
+/**
+ * Próxima ocurrencia del cumpleaños a partir de hoy (inclusive). Usa el año
+ * corriente y salta al siguiente si ya pasó. El 29/02 cae naturalmente al 01/03
+ * en años no bisiestos, que es un comportamiento aceptable para el aviso.
+ */
+function nextBirthday(birthDate: Date, today: Date): Date {
+  const start = startOfDayUtc(today);
+  const month = birthDate.getUTCMonth();
+  const day = birthDate.getUTCDate();
+
+  let candidate = new Date(Date.UTC(start.getUTCFullYear(), month, day));
+
+  if (candidate.getTime() < start.getTime()) {
+    candidate = new Date(Date.UTC(start.getUTCFullYear() + 1, month, day));
+  }
+
+  return candidate;
 }
 
 function startOfMonth(date: Date): Date {

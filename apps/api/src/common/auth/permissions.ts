@@ -3,6 +3,9 @@ import { UserRole } from '@prisma/client';
 export const ALL_PERMISSIONS = [
   'dashboard:read',
   'dashboard:full',
+  'taller:read',
+  'announcements:read',
+  'announcements:write',
   'members:read',
   'members:write',
   'profile:own',
@@ -24,8 +27,11 @@ export type Permission = (typeof ALL_PERMISSIONS)[number];
 
 export const ADMIN_PERMISSIONS: Permission[] = [...ALL_PERMISSIONS];
 
+// El socio ve por defecto "Nuestro Taller" (taller:read) y sus avisos, pero NO
+// el dashboard ejecutivo/financiero (dashboard:read), que queda para el admin.
 export const SOCIO_DEFAULT_PERMISSIONS: Permission[] = [
-  'dashboard:read',
+  'taller:read',
+  'announcements:read',
   'members:read',
   'profile:own',
   'debt:own',

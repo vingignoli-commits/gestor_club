@@ -5,6 +5,8 @@ export type PermissionUser = {
 
 export const PATH_PERMISSIONS: Record<string, string> = {
   '/': 'dashboard:read',
+  '/nuestro-taller': 'taller:read',
+  '/avisos': 'announcements:write',
   '/socios': 'members:read',
   '/mi-perfil': 'profile:own',
   '/tesoreria': 'treasury:read',
@@ -18,13 +20,17 @@ export const PATH_PERMISSIONS: Record<string, string> = {
 // Orden de preferencia para elegir la pantalla inicial de un usuario.
 // Coincide con el orden del menú lateral.
 export const LANDING_PRIORITY = [
+  // El admin tiene 'dashboard:read' y aterriza en el dashboard ejecutivo. El
+  // socio no lo tiene: salta '/' y cae en 'Nuestro Taller', su pantalla propia.
   '/',
+  '/nuestro-taller',
   '/socios',
   '/mi-perfil',
   '/tesoreria',
   '/caja',
   '/reportes',
   '/mensajeria',
+  '/avisos',
   '/auditoria',
   '/configuracion',
 ];

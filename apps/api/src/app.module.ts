@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 
 import { AccessGuard } from './common/auth/access.guard';
+import { AnnouncementsModule } from './modules/announcements/announcements.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { CashModule } from './modules/cash/cash.module';
@@ -18,6 +19,7 @@ import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
+    AnnouncementsModule,
     AuthModule,
     MembersModule,
     MonthlyRatesModule,
