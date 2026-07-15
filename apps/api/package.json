@@ -10,7 +10,8 @@
     "test": "vitest run",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:baseline": "prisma migrate resolve --applied 20260415150826_whatsapp_campaign_tracking || true; prisma migrate resolve --applied 20260416061424_add_member_birthdate || true",
+    "prisma:migrate:deploy": "npm run prisma:baseline && prisma migrate deploy",
     "prisma:seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
