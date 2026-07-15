@@ -10,6 +10,9 @@ type UserRole = 'ADMIN' | 'SOCIO';
 type PermissionKey =
   | 'dashboard:read'
   | 'dashboard:full'
+  | 'taller:read'
+  | 'announcements:read'
+  | 'announcements:write'
   | 'members:read'
   | 'members:write'
   | 'profile:own'
@@ -80,7 +83,8 @@ const PERMISSION_GROUPS: Array<{
   {
     title: 'Lectura base',
     items: [
-      { key: 'dashboard:read', label: 'Ver dashboard' },
+      { key: 'taller:read', label: 'Ver Nuestro Taller' },
+      { key: 'announcements:read', label: 'Ver avisos' },
       { key: 'members:read', label: 'Ver cuadro' },
       { key: 'profile:own', label: 'Ver mi perfil' },
       { key: 'debt:own', label: 'Ver mi deuda' },
@@ -89,7 +93,9 @@ const PERMISSION_GROUPS: Array<{
   {
     title: 'Permisos especiales del socio',
     items: [
+      { key: 'dashboard:read', label: 'Ver dashboard ejecutivo' },
       { key: 'dashboard:full', label: 'Dashboard completo' },
+      { key: 'announcements:write', label: 'Escribir avisos' },
       { key: 'members:write', label: 'Editar cuadro' },
       { key: 'debt:all', label: 'Ver deuda de otros' },
       { key: 'treasury:read', label: 'Ver tesorería' },
@@ -112,7 +118,8 @@ const PERMISSION_GROUPS: Array<{
 ];
 
 const DEFAULT_SOCIO_PERMISSIONS = [
-  'dashboard:read',
+  'taller:read',
+  'announcements:read',
   'members:read',
   'profile:own',
   'debt:own',

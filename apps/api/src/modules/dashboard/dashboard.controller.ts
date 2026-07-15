@@ -20,4 +20,12 @@ export class DashboardController {
       includeDebtorDetails: userHasPermission(user, 'debt:all'),
     });
   }
+
+  // Tablero "Nuestro Taller" para socios: exige su propio permiso, no el del
+  // dashboard ejecutivo (que queda para el admin).
+  @Get('taller')
+  @RequirePermissions('taller:read')
+  getTaller() {
+    return this.dashboardService.getTallerDashboard();
+  }
 }

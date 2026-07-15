@@ -11,7 +11,9 @@ const navigation: Array<{
   href: Route;
   permission: string;
 }> = [
+  { label: 'Nuestro Taller', href: '/nuestro-taller', permission: 'taller:read' },
   { label: 'Dashboard', href: '/', permission: 'dashboard:read' },
+  { label: 'Avisos', href: '/avisos', permission: 'announcements:write' },
   { label: 'Cuadro', href: '/socios', permission: 'members:read' },
   { label: 'Mi Perfil', href: '/mi-perfil', permission: 'profile:own' },
   { label: 'Tesorería', href: '/tesoreria', permission: 'treasury:read' },

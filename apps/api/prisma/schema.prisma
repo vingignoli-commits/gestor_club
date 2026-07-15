@@ -235,6 +235,18 @@ model MessageDispatch {
   @@index([memberId, campaignCode, campaignYear, campaignMonth])
 }
 
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  isPinned  Boolean  @default(false)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, isPinned, createdAt(sort: Desc)])
+}
+
 model AuditLog {
   id         String   @id @default(cuid())
   entityName String
