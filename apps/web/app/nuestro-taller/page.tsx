@@ -394,7 +394,7 @@ export default function NuestroTallerPage() {
             <button
               type="button"
               onClick={markAllRead}
-              className="rounded-2xl border border-ink/10 bg-white px-4 py-2 text-sm font-semibold text-ink/70 hover:bg-ink/5"
+              className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-ink/10 bg-white px-4 text-sm font-semibold text-ink/70 hover:bg-ink/5"
             >
               Marcar todo como leído
             </button>
@@ -442,7 +442,7 @@ export default function NuestroTallerPage() {
                       <button
                         type="button"
                         onClick={() => markRead(item.id)}
-                        className="shrink-0 rounded-xl border border-ink/10 bg-white px-3 py-1.5 text-xs font-semibold text-ink/60 hover:bg-ink/5"
+                        className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl border border-ink/10 bg-white px-4 text-sm font-semibold text-ink/60 hover:bg-ink/5"
                       >
                         Marcar leído
                       </button>

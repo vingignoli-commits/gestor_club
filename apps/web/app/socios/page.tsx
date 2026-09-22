@@ -1132,7 +1132,7 @@ export default function MembersPage() {
                   <select
                     value={sortField}
                     onChange={(e) => setSortField(e.target.value as SortField)}
-                    className="rounded-xl border border-ink/10 px-3 py-2 text-xs"
+                    className="min-h-11 rounded-xl border border-ink/10 px-3 text-xs"
                   >
                     <option value="lastName">Apellido</option>
                     <option value="firstName">Nombre</option>
@@ -1149,7 +1149,7 @@ export default function MembersPage() {
                         prev === "asc" ? "desc" : "asc",
                       )
                     }
-                    className="rounded-xl border border-ink/10 px-3 py-2 text-xs font-semibold"
+                    className="inline-flex min-h-11 items-center justify-center rounded-xl border border-ink/10 px-3 text-xs font-semibold"
                   >
                     {sortDirection === "asc" ? "↑" : "↓"}
                   </button>

@@ -230,28 +230,28 @@ export default function AvisosPage() {
                   <button
                     type="button"
                     onClick={() => startEdit(item)}
-                    className="rounded-xl border border-ink/10 bg-white px-3 py-1.5 text-xs font-semibold text-ink/70 hover:bg-ink/5"
+                    className="inline-flex min-h-11 items-center justify-center rounded-xl border border-ink/10 bg-white px-4 text-sm font-semibold text-ink/70 hover:bg-ink/5"
                   >
                     Editar
                   </button>
                   <button
                     type="button"
                     onClick={() => toggle(item, "isPinned")}
-                    className="rounded-xl border border-ink/10 bg-white px-3 py-1.5 text-xs font-semibold text-ink/70 hover:bg-ink/5"
+                    className="inline-flex min-h-11 items-center justify-center rounded-xl border border-ink/10 bg-white px-4 text-sm font-semibold text-ink/70 hover:bg-ink/5"
                   >
                     {item.isPinned ? "Desfijar" : "Fijar"}
                   </button>
                   <button
                     type="button"
                     onClick={() => toggle(item, "isActive")}
-                    className="rounded-xl border border-ink/10 bg-white px-3 py-1.5 text-xs font-semibold text-ink/70 hover:bg-ink/5"
+                    className="inline-flex min-h-11 items-center justify-center rounded-xl border border-ink/10 bg-white px-4 text-sm font-semibold text-ink/70 hover:bg-ink/5"
                   >
                     {item.isActive ? "Desactivar" : "Reactivar"}
                   </button>
                   <button
                     type="button"
                     onClick={() => remove(item)}
-                    className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100"
+                    className="inline-flex min-h-11 items-center justify-center rounded-xl border border-rose-200 bg-rose-50 px-4 text-sm font-semibold text-rose-700 hover:bg-rose-100"
                   >
                     Eliminar
                   </button>
