@@ -126,12 +126,58 @@ const TEXT_INPUTS: Array<{ key: keyof Draft; label: string }> = [
   { key: "primaryDoctorPhone", label: "Teléfono del médico" },
 ];
 
-function Dato({ label, value }: { label: string; value: string | null }) {
+/**
+ * "alerta" es para lo que hay que leer sí o sí antes de actuar; "ok" para un
+ * estado favorable que conviene poder confirmar de un vistazo.
+ */
+type Tono = "neutral" | "alerta" | "ok";
+
+const TONOS: Record<Tono, { caja: string; rotulo: string; texto: string }> = {
+  neutral: {
+    caja: "bg-ink/5",
+    rotulo: "text-ink/50",
+    texto: "text-ink",
+  },
+  alerta: {
+    caja: "border-2 border-amber-400 bg-amber-50",
+    rotulo: "text-amber-900",
+    texto: "text-ink font-medium",
+  },
+  ok: {
+    caja: "border-2 border-emerald-300 bg-emerald-50",
+    rotulo: "text-emerald-800",
+    texto: "text-emerald-900 font-medium",
+  },
+};
+
+function Dato({
+  label,
+  value,
+  tono = "neutral",
+}: {
+  label: string;
+  value: string | null;
+  tono?: Tono;
+}) {
+  const hayDato = Boolean(value?.trim());
+
+  // Un campo vacío nunca alerta: si todo llama la atención, nada la llama. La
+  // alerta marca que hay algo cargado que leer, no que el campo exista.
+  const efectivo: Tono = tono === "alerta" && !hayDato ? "neutral" : tono;
+  const estilo = TONOS[efectivo];
+
   return (
-    <div className="rounded-2xl bg-ink/5 px-4 py-3">
-      <div className="text-xs uppercase tracking-wide text-ink/50">{label}</div>
-      <div className="mt-1 whitespace-pre-wrap text-sm text-ink">
-        {value?.trim() ? value : <span className="text-ink/40">Sin datos</span>}
+    <div className={`rounded-2xl px-4 py-3 ${estilo.caja}`}>
+      <div
+        className={`flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide ${estilo.rotulo}`}
+      >
+        {/* El simbolo acompaña al color: quien no distingue el ámbar del gris
+            igual ve que esa tarjeta pide atención. */}
+        {efectivo === "alerta" ? <span aria-hidden="true">⚠</span> : null}
+        {label}
+      </div>
+      <div className={`mt-1 whitespace-pre-wrap text-sm ${estilo.texto}`}>
+        {hayDato ? value : <span className="text-ink/40">Sin datos</span>}
       </div>
     </div>
   );
@@ -545,20 +591,39 @@ export function HealthCard({
                 health ? BLOOD_TYPE_LABELS[health.bloodType] ?? "Sin datos" : null
               }
             />
+            {/* Verde cuando es donante. La oposición va en ámbar y no en gris
+                porque el sentido del campo es que alguien la vea y la respete:
+                pasarla por alto es de las pocas cosas que no tienen vuelta. */}
             <Dato
               label="Donación de órganos"
+              tono={
+                !health
+                  ? "neutral"
+                  : health.organDonationOpposition
+                    ? "alerta"
+                    : "ok"
+              }
               value={
                 health
                   ? health.organDonationOpposition
-                    ? "Manifestó oposición"
-                    : "Sin oposición registrada"
+                    ? "Manifestó oposición a donar"
+                    : "Donante · sin oposición registrada"
                   : null
               }
             />
-            <Dato label="Alergias" value={health?.allergies ?? null} />
-            <Dato label="Medicación habitual" value={health?.medications ?? null} />
+            <Dato
+              label="Alergias"
+              tono="alerta"
+              value={health?.allergies ?? null}
+            />
+            <Dato
+              label="Medicación habitual"
+              tono="alerta"
+              value={health?.medications ?? null}
+            />
             <Dato
               label="Condiciones crónicas"
+              tono="alerta"
               value={health?.chronicConditions ?? null}
             />
             <Dato
@@ -595,14 +660,17 @@ export function HealthCard({
             />
             <Dato
               label="Dispositivos implantados"
+              tono="alerta"
               value={health?.implantedDevices ?? null}
             />
             <Dato
               label="Cirugías relevantes"
+              tono="alerta"
               value={health?.relevantSurgeries ?? null}
             />
             <Dato
               label="Directivas anticipadas"
+              tono="alerta"
               value={health?.advanceDirectives ?? null}
             />
           </div>
