@@ -126,11 +126,8 @@ const TEXT_INPUTS: Array<{ key: keyof Draft; label: string }> = [
   { key: "primaryDoctorPhone", label: "Teléfono del médico" },
 ];
 
-/**
- * "alerta" es para lo que hay que leer sí o sí antes de actuar; "ok" para un
- * estado favorable que conviene poder confirmar de un vistazo.
- */
-type Tono = "neutral" | "alerta" | "ok";
+/** "alerta" es para lo que hay que leer sí o sí antes de actuar. */
+type Tono = "neutral" | "alerta";
 
 const TONOS: Record<Tono, { caja: string; rotulo: string; texto: string }> = {
   neutral: {
@@ -142,11 +139,6 @@ const TONOS: Record<Tono, { caja: string; rotulo: string; texto: string }> = {
     caja: "border-2 border-amber-400 bg-amber-50",
     rotulo: "text-amber-900",
     texto: "text-ink font-medium",
-  },
-  ok: {
-    caja: "border-2 border-emerald-300 bg-emerald-50",
-    rotulo: "text-emerald-800",
-    texto: "text-emerald-900 font-medium",
   },
 };
 
@@ -591,18 +583,10 @@ export function HealthCard({
                 health ? BLOOD_TYPE_LABELS[health.bloodType] ?? "Sin datos" : null
               }
             />
-            {/* Verde cuando es donante. La oposición va en ámbar y no en gris
-                porque el sentido del campo es que alguien la vea y la respete:
-                pasarla por alto es de las pocas cosas que no tienen vuelta. */}
+            {/* Sin formato especial en ninguno de los dos estados: la alerta
+                queda reservada para lo que hay que leer antes de actuar. */}
             <Dato
               label="Donación de órganos"
-              tono={
-                !health
-                  ? "neutral"
-                  : health.organDonationOpposition
-                    ? "alerta"
-                    : "ok"
-              }
               value={
                 health
                   ? health.organDonationOpposition
