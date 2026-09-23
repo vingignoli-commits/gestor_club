@@ -15,6 +15,7 @@ const navigation: Array<{
   { label: 'Dashboard', href: '/', permission: 'dashboard:read' },
   { label: 'Avisos', href: '/avisos', permission: 'announcements:write' },
   { label: 'Cuadro', href: '/socios', permission: 'members:read' },
+  { label: 'Contactos', href: '/contactos', permission: 'contacts:read' },
   { label: 'Mi Perfil', href: '/mi-perfil', permission: 'profile:own' },
   { label: 'Tesorería', href: '/tesoreria', permission: 'treasury:read' },
   { label: 'Caja', href: '/caja', permission: 'cash:read' },

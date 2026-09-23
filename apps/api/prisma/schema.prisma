@@ -8,22 +8,22 @@ datasource db {
 }
 
 model User {
-  id           String           @id @default(cuid())
-  email        String           @unique
-  fullName     String
-  role         UserRole
-  memberId     String?          @unique
-  passwordHash String
-  passwordSalt String
-  isActive     Boolean          @default(true)
+  id                 String           @id @default(cuid())
+  email              String           @unique
+  fullName           String
+  role               UserRole
+  memberId           String?          @unique
+  passwordHash       String
+  passwordSalt       String
+  isActive           Boolean          @default(true)
   // true mientras el usuario siga con la contraseña que le asignó un tercero
   // (alta masiva o reseteo por un ADMIN). Vuelve a false cuando la cambia él.
-  mustChangePassword Boolean    @default(false)
-  lastLoginAt  DateTime?
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
-  member       Member?          @relation(fields: [memberId], references: [id], onDelete: SetNull)
-  permissions  UserPermission[]
+  mustChangePassword Boolean          @default(false)
+  lastLoginAt        DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  member             Member?          @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  permissions        UserPermission[]
 
   @@index([role, isActive])
   @@index([memberId])
@@ -43,30 +43,39 @@ model UserPermission {
 }
 
 model Member {
-  id              String                  @id @default(cuid())
-  matricula       String                  @unique
-  documentNumber  String?
-  firstName       String
-  lastName        String
-  category        MemberCategory
-  status          MemberStatus            @default(ACTIVE)
-  grade           String?
-  phone           String?
-  email           String?
-  notes           String?
-  joinedAt        DateTime
-  initiationDate  DateTime
-  fellowcraftDate DateTime?
-  masterDate      DateTime?
-  birthDate       DateTime?
-  createdAt       DateTime                @default(now())
-  updatedAt       DateTime                @updatedAt
-  charges         Charge[]
-  categoryHistory MemberCategoryHistory[]
-  statusHistory   MemberStatusHistory[]
-  messages        MessageDispatch[]
-  payments        Payment[]
-  user            User?
+  id                           String                  @id @default(cuid())
+  matricula                    String                  @unique
+  documentNumber               String?
+  firstName                    String
+  lastName                     String
+  category                     MemberCategory
+  status                       MemberStatus            @default(ACTIVE)
+  grade                        String?
+  phone                        String?
+  // Segundo numero de contacto, para cuando el celular no responde.
+  alternatePhone               String?
+  email                        String?
+  notes                        String?
+  // Contacto de emergencia: vive con los datos de contacto y NO con los de
+  // salud a proposito. Ante una urgencia hay que poder llamar a la familia sin
+  // necesidad de acceder a informacion medica, que tiene permiso aparte.
+  emergencyContactName         String?
+  emergencyContactRelationship String?
+  emergencyContactPhone        String?
+  joinedAt                     DateTime
+  initiationDate               DateTime
+  fellowcraftDate              DateTime?
+  masterDate                   DateTime?
+  birthDate                    DateTime?
+  createdAt                    DateTime                @default(now())
+  updatedAt                    DateTime                @updatedAt
+  charges                      Charge[]
+  categoryHistory              MemberCategoryHistory[]
+  statusHistory                MemberStatusHistory[]
+  messages                     MessageDispatch[]
+  payments                     Payment[]
+  user                         User?
+  health                       MemberHealth?
 
   @@index([lastName, firstName])
   @@index([status, category])
@@ -141,19 +150,19 @@ model Charge {
 }
 
 model Payment {
-  id          String        @id @default(cuid())
+  id          String              @id @default(cuid())
   memberId    String
   paidAt      DateTime
   periodYear  Int
   periodMonth Int
-  amount      Decimal       @db.Decimal(12, 2)
+  amount      Decimal             @db.Decimal(12, 2)
   methodCode  String
-  status      PaymentStatus @default(REGISTERED)
+  status      PaymentStatus       @default(REGISTERED)
   notes       String?
   receiptUrl  String?
   receiptNote String?
-  createdAt   DateTime      @default(now())
-  member      Member        @relation(fields: [memberId], references: [id])
+  createdAt   DateTime            @default(now())
+  member      Member              @relation(fields: [memberId], references: [id])
   allocations PaymentAllocation[]
 
   @@index([memberId, paidAt(sort: Desc)])
@@ -247,6 +256,50 @@ model Announcement {
   @@index([isActive, isPinned, createdAt(sort: Desc)])
 }
 
+// Ficha de emergencia del socio. Va en tabla aparte y no como columnas de
+// Member por una razon concreta: 'members:read' es permiso por defecto de todo
+// socio y /members devuelve la fila entera, asi que cualquier dato de salud
+// que viviera en Member quedaria visible para el padron completo. Aca el
+// acceso pasa por 'health:read', que no es default de nadie.
+//
+// Todos los campos son opcionales: la carga es voluntaria y con
+// consentimiento del socio, nunca un requisito para pertenecer al Taller.
+model MemberHealth {
+  id       String @id @default(cuid())
+  memberId String @unique
+  member   Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  // --- Lo que cambia la conducta en el primer minuto ---
+  bloodType         BloodType @default(UNKNOWN)
+  allergies         String?
+  // Medicacion habitual. Es el dato mas subestimado de la ficha: un
+  // anticoagulante cambia por completo el manejo de un traumatismo.
+  medications       String?
+  chronicConditions String?
+
+  // Cobertura medica: define a que sanatorio trasladan y es lo primero que
+  // piden al admitir.
+  insuranceProvider       String?
+  insuranceMemberId       String?
+  insuranceEmergencyPhone String?
+
+  // --- Importante, pero no inmediato ---
+  primaryDoctorName       String?
+  primaryDoctorPhone      String?
+  // Marcapasos, stent, valvula, protesis. Un marcapasos contraindica la RMN y
+  // cambia la maniobra de RCP.
+  implantedDevices        String?
+  relevantSurgeries       String?
+  // Ley Justina (27.447): todos somos donantes salvo manifestacion expresa en
+  // contrario, asi que el dato util es la oposicion, no el consentimiento.
+  organDonationOpposition Boolean @default(false)
+  // Si existen directivas anticipadas y donde estan, no su contenido.
+  advanceDirectives       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model AuditLog {
   id         String   @id @default(cuid())
   entityName String
@@ -279,6 +332,19 @@ model members_import {
 enum UserRole {
   ADMIN
   SOCIO
+}
+
+// POS/NEG en vez de +/- porque un enum de Postgres no admite esos caracteres.
+enum BloodType {
+  A_POS
+  A_NEG
+  B_POS
+  B_NEG
+  AB_POS
+  AB_NEG
+  O_POS
+  O_NEG
+  UNKNOWN
 }
 
 enum MemberStatus {

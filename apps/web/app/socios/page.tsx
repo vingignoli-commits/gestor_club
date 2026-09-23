@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { HealthCard } from "../../components/health-card";
 import { SectionCard } from "../../components/section-card";
 import { useAuth } from "../../context/auth";
 import { api } from "../../lib/api";
@@ -16,7 +17,11 @@ type Member = {
   status: string;
   grade: string | null;
   phone: string | null;
+  alternatePhone: string | null;
   email: string | null;
+  emergencyContactName: string | null;
+  emergencyContactRelationship: string | null;
+  emergencyContactPhone: string | null;
   notes: string | null;
   joinedAt: string;
   initiationDate: string;
@@ -63,7 +68,11 @@ type MemberForm = {
   status: string;
   grade: string;
   phone: string;
+  alternatePhone: string;
   email: string;
+  emergencyContactName: string;
+  emergencyContactRelationship: string;
+  emergencyContactPhone: string;
   notes: string;
   joinedAt: string;
   initiationDate: string;
@@ -128,7 +137,11 @@ function emptyForm(): MemberForm {
     status: "ACTIVE",
     grade: "APRENDIZ",
     phone: "",
+    alternatePhone: "",
     email: "",
+    emergencyContactName: "",
+    emergencyContactRelationship: "",
+    emergencyContactPhone: "",
     notes: "",
     joinedAt: new Date().toISOString().split("T")[0],
     initiationDate: new Date().toISOString().split("T")[0],
@@ -253,7 +266,7 @@ function badgeClass(
 }
 
 export default function MembersPage() {
-  const { canEdit } = useAuth();
+  const { canEdit, hasPermission } = useAuth();
 
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
@@ -313,7 +326,11 @@ export default function MembersPage() {
       status: member.status,
       grade: member.grade ?? "APRENDIZ",
       phone: member.phone ?? "",
+      alternatePhone: member.alternatePhone ?? "",
       email: member.email ?? "",
+      emergencyContactName: member.emergencyContactName ?? "",
+      emergencyContactRelationship: member.emergencyContactRelationship ?? "",
+      emergencyContactPhone: member.emergencyContactPhone ?? "",
       notes: member.notes ?? "",
       joinedAt: member.joinedAt.split("T")[0],
       initiationDate: member.initiationDate?.split("T")[0] ?? "",
@@ -389,7 +406,14 @@ export default function MembersPage() {
           status: form.status,
           grade: form.grade,
           phone: form.phone.trim() || undefined,
+          alternatePhone: form.alternatePhone.trim() || undefined,
           email: form.email.trim() || undefined,
+          emergencyContactName:
+            form.emergencyContactName.trim() || undefined,
+          emergencyContactRelationship:
+            form.emergencyContactRelationship.trim() || undefined,
+          emergencyContactPhone:
+            form.emergencyContactPhone.trim() || undefined,
           notes: form.notes.trim() || undefined,
           initiationDate: form.initiationDate,
           fellowcraftDate: form.fellowcraftDate || undefined,
@@ -406,7 +430,14 @@ export default function MembersPage() {
           status: form.status,
           grade: form.grade,
           phone: form.phone.trim() || undefined,
+          alternatePhone: form.alternatePhone.trim() || undefined,
           email: form.email.trim() || undefined,
+          emergencyContactName:
+            form.emergencyContactName.trim() || undefined,
+          emergencyContactRelationship:
+            form.emergencyContactRelationship.trim() || undefined,
+          emergencyContactPhone:
+            form.emergencyContactPhone.trim() || undefined,
           notes: form.notes.trim() || undefined,
           joinedAt: new Date(form.joinedAt).toISOString(),
           initiationDate: form.initiationDate,
@@ -1344,13 +1375,49 @@ export default function MembersPage() {
                       <strong>Celular:</strong> {selectedProfile.phone ?? "-"}
                     </div>
                     <div>
+                      <strong>Tel. alternativo:</strong>{" "}
+                      {selectedProfile.alternatePhone ?? "-"}
+                    </div>
+                    <div>
                       <strong>Email:</strong> {selectedProfile.email ?? "-"}
+                    </div>
+                    <div className="sm:col-span-2 xl:col-span-1">
+                      <strong>Contacto de emergencia:</strong>{" "}
+                      {selectedProfile.emergencyContactName
+                        ? [
+                            selectedProfile.emergencyContactName,
+                            selectedProfile.emergencyContactRelationship,
+                            selectedProfile.emergencyContactPhone,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")
+                        : "-"}
                     </div>
                     <div className="sm:col-span-2 xl:col-span-1">
                       <strong>Notas:</strong> {selectedProfile.notes ?? "-"}
                     </div>
                   </div>
                 </div>
+
+                {/* Solo para quien tenga 'health:read'. El resto del padron
+                    ve la ficha del socio sin ningun dato medico. */}
+                {hasPermission("health:read") && (
+                  <div className="rounded-2xl border border-ink/10 bg-white p-4">
+                    <div className="mb-1 text-lg font-semibold text-ink">
+                      Ficha de emergencia
+                    </div>
+                    <p className="mb-4 text-sm text-ink/60">
+                      Dato sensible: se consulta cuando hace falta, no por
+                      curiosidad. Cada acceso de escritura queda registrado en
+                      auditoría.
+                    </p>
+
+                    <HealthCard
+                      endpoint={`/health/members/${selectedProfile.id}`}
+                      canEdit={hasPermission("health:write")}
+                    />
+                  </div>
+                )}
 
                 <div className="rounded-2xl border border-ink/10 bg-white p-4">
                   <div className="mb-4 text-lg font-semibold text-ink">
@@ -1789,6 +1856,81 @@ export default function MembersPage() {
                   value={form.email}
                   onChange={(e) =>
                     setForm((prev) => ({ ...prev, email: e.target.value }))
+                  }
+                  className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-ink/80">
+                  Teléfono alternativo
+                </label>
+                <input
+                  value={form.alternatePhone}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      alternatePhone: e.target.value,
+                    }))
+                  }
+                  placeholder="Fijo o segundo número"
+                  className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                />
+              </div>
+
+              {/* Contacto de emergencia: va con los datos de contacto y no con
+                  la ficha de salud, para que se pueda avisar a la familia sin
+                  necesidad del permiso 'health:read'. */}
+              <div className="md:col-span-2">
+                <div className="rounded-2xl bg-amber-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-amber-800">
+                  En caso de emergencia
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-ink/80">
+                  Nombre del contacto
+                </label>
+                <input
+                  value={form.emergencyContactName}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      emergencyContactName: e.target.value,
+                    }))
+                  }
+                  className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-ink/80">
+                  Parentesco o vínculo
+                </label>
+                <input
+                  value={form.emergencyContactRelationship}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      emergencyContactRelationship: e.target.value,
+                    }))
+                  }
+                  placeholder="Cónyuge, hijo/a, hermano/a..."
+                  className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-sm font-medium text-ink/80">
+                  Teléfono del contacto
+                </label>
+                <input
+                  value={form.emergencyContactPhone}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      emergencyContactPhone: e.target.value,
+                    }))
                   }
                   className="w-full rounded-2xl border border-ink/10 px-4 py-3 text-sm"
                 />

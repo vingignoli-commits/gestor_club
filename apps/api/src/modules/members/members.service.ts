@@ -80,7 +80,12 @@ export class MembersService {
           status: dto.status ?? "ACTIVE",
           grade: dto.grade ?? null,
           phone: dto.phone?.trim() || null,
+          alternatePhone: dto.alternatePhone?.trim() || null,
           email: dto.email?.trim() || null,
+          emergencyContactName: dto.emergencyContactName?.trim() || null,
+          emergencyContactRelationship:
+            dto.emergencyContactRelationship?.trim() || null,
+          emergencyContactPhone: dto.emergencyContactPhone?.trim() || null,
           notes: dto.notes?.trim() || null,
           joinedAt,
           initiationDate: new Date(dto.initiationDate),
@@ -222,8 +227,24 @@ export class MembersService {
             grade: dto.grade === undefined ? undefined : dto.grade || null,
             phone:
               dto.phone === undefined ? undefined : dto.phone.trim() || null,
+            alternatePhone:
+              dto.alternatePhone === undefined
+                ? undefined
+                : dto.alternatePhone.trim() || null,
             email:
               dto.email === undefined ? undefined : dto.email.trim() || null,
+            emergencyContactName:
+              dto.emergencyContactName === undefined
+                ? undefined
+                : dto.emergencyContactName.trim() || null,
+            emergencyContactRelationship:
+              dto.emergencyContactRelationship === undefined
+                ? undefined
+                : dto.emergencyContactRelationship.trim() || null,
+            emergencyContactPhone:
+              dto.emergencyContactPhone === undefined
+                ? undefined
+                : dto.emergencyContactPhone.trim() || null,
             notes:
               dto.notes === undefined ? undefined : dto.notes.trim() || null,
             initiationDate:

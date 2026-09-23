@@ -46,6 +46,22 @@ export class UpdateMemberDto {
 
   @IsOptional()
   @IsString()
+  alternatePhone?: string;
+
+  @IsOptional()
+  @IsString()
+  emergencyContactName?: string;
+
+  @IsOptional()
+  @IsString()
+  emergencyContactRelationship?: string;
+
+  @IsOptional()
+  @IsString()
+  emergencyContactPhone?: string;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
 
   @IsOptional()
