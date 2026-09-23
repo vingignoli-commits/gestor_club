@@ -1381,17 +1381,31 @@ export default function MembersPage() {
                     <div>
                       <strong>Email:</strong> {selectedProfile.email ?? "-"}
                     </div>
+                    {/* A quien llamar: nombre, parentesco y telefono van
+                        rotulados por separado. Concatenados en una sola linea
+                        no se entiende cual de los datos es cual. */}
                     <div className="sm:col-span-2 xl:col-span-1">
-                      <strong>Contacto de emergencia:</strong>{" "}
-                      {selectedProfile.emergencyContactName
-                        ? [
-                            selectedProfile.emergencyContactName,
-                            selectedProfile.emergencyContactRelationship,
-                            selectedProfile.emergencyContactPhone,
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")
-                        : "-"}
+                      <strong>A quién llamar en una emergencia:</strong>
+                      {selectedProfile.emergencyContactName ||
+                      selectedProfile.emergencyContactPhone ? (
+                        <div className="mt-1 space-y-0.5">
+                          <div>
+                            Nombre:{" "}
+                            {selectedProfile.emergencyContactName ?? "falta"}
+                          </div>
+                          <div>
+                            Parentesco:{" "}
+                            {selectedProfile.emergencyContactRelationship ??
+                              "falta"}
+                          </div>
+                          <div>
+                            Teléfono:{" "}
+                            {selectedProfile.emergencyContactPhone ?? "falta"}
+                          </div>
+                        </div>
+                      ) : (
+                        " -"
+                      )}
                     </div>
                     <div className="sm:col-span-2 xl:col-span-1">
                       <strong>Notas:</strong> {selectedProfile.notes ?? "-"}
