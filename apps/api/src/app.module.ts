@@ -7,7 +7,9 @@ import { AnnouncementsModule } from './modules/announcements/announcements.modul
 import { AuthModule } from './modules/auth/auth.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { CashModule } from './modules/cash/cash.module';
+import { ContactsModule } from './modules/contacts/contacts.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { HealthModule } from './modules/health/health.module';
 import { MembersModule } from './modules/members/members.module';
 import { MonthlyRatesModule } from './modules/monthly-rates/monthly-rates.module';
 import { PaymentsModule } from './modules/payments/payments.module';
@@ -25,7 +27,9 @@ import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
     MonthlyRatesModule,
     PaymentsModule,
     CashModule,
+    ContactsModule,
     DashboardModule,
+    HealthModule,
     ReportsModule,
     AuditModule,
     WhatsappModule,

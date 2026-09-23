@@ -8,6 +8,12 @@ export const ALL_PERMISSIONS = [
   'announcements:write',
   'members:read',
   'members:write',
+  'contacts:read',
+  // Ficha de emergencia. Es dato sensible (Ley 25.326), asi que no es default
+  // de nadie: se otorga explicitamente desde Configuracion. Cada socio ve y
+  // edita la suya propia por 'profile:own', sin necesidad de este permiso.
+  'health:read',
+  'health:write',
   'profile:own',
   'debt:own',
   'debt:all',
@@ -33,6 +39,7 @@ export const SOCIO_DEFAULT_PERMISSIONS: Permission[] = [
   'taller:read',
   'announcements:read',
   'members:read',
+  'contacts:read',
   'profile:own',
   'debt:own',
 ];

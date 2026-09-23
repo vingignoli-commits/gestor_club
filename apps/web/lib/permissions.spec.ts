@@ -63,3 +63,57 @@ describe('resolveLandingPath', () => {
     expect(resolveLandingPath(null)).toBeNull();
   });
 });
+
+describe('Contactos y ficha de emergencia', () => {
+  const socioComun: PermissionUser = {
+    role: 'SOCIO',
+    // Lo que otorga SOCIO_DEFAULT_PERMISSIONS en la API.
+    permissions: [
+      'taller:read',
+      'announcements:read',
+      'members:read',
+      'contacts:read',
+      'profile:own',
+      'debt:own',
+    ],
+  };
+
+  it('el socio común entra al directorio de contactos', () => {
+    expect(canAccessPath(socioComun, '/contactos')).toBe(true);
+  });
+
+  it('un socio sin contacts:read no entra', () => {
+    const sinContactos: PermissionUser = {
+      role: 'SOCIO',
+      permissions: ['taller:read', 'profile:own'],
+    };
+
+    expect(canAccessPath(sinContactos, '/contactos')).toBe(false);
+  });
+
+  // La ficha de emergencia no es una ruta propia: se muestra dentro de Cuadro
+  // y de Mi Perfil. Por eso 'health:read' no debe habilitar ninguna pantalla
+  // por sí solo, ni convertirse en landing de nadie.
+  it('health:read no abre ninguna sección por sí mismo', () => {
+    const soloSalud: PermissionUser = {
+      role: 'SOCIO',
+      permissions: ['health:read'],
+    };
+
+    expect(resolveLandingPath(soloSalud)).toBeNull();
+  });
+
+  it('el socio común aterriza en Nuestro Taller, no en el directorio', () => {
+    // taller:read va antes que /socios y /contactos en LANDING_PRIORITY.
+    expect(resolveLandingPath(socioComun)).toBe('/nuestro-taller');
+  });
+
+  it('el directorio no se antepone al Cuadro cuando se tienen ambos', () => {
+    const sinTaller: PermissionUser = {
+      role: 'SOCIO',
+      permissions: ['contacts:read', 'members:read'],
+    };
+
+    expect(resolveLandingPath(sinTaller)).toBe('/socios');
+  });
+});

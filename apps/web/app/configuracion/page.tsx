@@ -15,6 +15,9 @@ type PermissionKey =
   | 'announcements:write'
   | 'members:read'
   | 'members:write'
+  | 'contacts:read'
+  | 'health:read'
+  | 'health:write'
   | 'profile:own'
   | 'debt:own'
   | 'debt:all'
@@ -86,6 +89,7 @@ const PERMISSION_GROUPS: Array<{
       { key: 'taller:read', label: 'Ver Nuestro Taller' },
       { key: 'announcements:read', label: 'Ver avisos' },
       { key: 'members:read', label: 'Ver cuadro' },
+      { key: 'contacts:read', label: 'Ver contactos' },
       { key: 'profile:own', label: 'Ver mi perfil' },
       { key: 'debt:own', label: 'Ver mi deuda' },
     ],
@@ -106,6 +110,16 @@ const PERMISSION_GROUPS: Array<{
     ],
   },
   {
+    // Aparte del resto: es dato sensible (Ley 25.326) y conviene que otorgarlo
+    // sea una decision consciente y no un tilde mas en una lista larga. Cada
+    // socio ve y edita su propia ficha sin ninguno de estos dos permisos.
+    title: 'Ficha de emergencia (dato sensible)',
+    items: [
+      { key: 'health:read', label: 'Ver ficha de emergencia de otros' },
+      { key: 'health:write', label: 'Editar ficha de emergencia de otros' },
+    ],
+  },
+  {
     title: 'Permisos de escritura',
     items: [
       { key: 'treasury:write', label: 'Editar tesorería' },
@@ -121,6 +135,7 @@ const DEFAULT_SOCIO_PERMISSIONS = [
   'taller:read',
   'announcements:read',
   'members:read',
+  'contacts:read',
   'profile:own',
   'debt:own',
 ];

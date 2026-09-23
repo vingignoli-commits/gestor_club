@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { HealthCard } from "../../components/health-card";
 import { SectionCard } from "../../components/section-card";
 import { useAuth } from "../../context/auth";
 import { api } from "../../lib/api";
@@ -626,6 +627,13 @@ export default function MiPerfilPage() {
           )}
         </SectionCard>
       </div>
+
+      <SectionCard
+        title="Mi ficha de emergencia"
+        description="La completás vos y es voluntaria. Solo la ve un administrador y quien tenga el permiso de ficha de emergencia; el resto del Taller no accede a estos datos."
+      >
+        <HealthCard endpoint="/health/me" canEdit ownRecord />
+      </SectionCard>
 
       <ChangePasswordCard />
     </div>
