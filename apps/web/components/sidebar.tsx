@@ -85,7 +85,9 @@ function NavigationLinks({ onNavigate }: { onNavigate?: () => void }) {
   );
 
   return (
-    <nav className="flex flex-1 flex-col gap-2">
+    /* min-h-0 es imprescindible: sin eso el nav no puede achicarse por debajo
+       del alto de su contenido y el overflow-y-auto no llega a scrollear nunca. */
+    <nav className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
       {items.map((item) => {
         const isActive = pathname === item.href;
 
@@ -164,7 +166,11 @@ export function Sidebar() {
         </div>
       )}
 
-      <aside className="hidden min-h-screen w-72 shrink-0 flex-col border-r border-ink/10 bg-white p-4 lg:flex">
+      {/* sticky + h-screen en lugar de min-h-screen. Como flex item, el aside
+          se estiraba a la altura del contenido de la pagina: en Contactos eso
+          eran 7000px, y el boton de cerrar sesion quedaba al final de todo
+          porque el nav con flex-1 lo empujaba hasta abajo. */}
+      <aside className="sticky top-0 hidden h-screen w-72 shrink-0 flex-col border-r border-ink/10 bg-white p-4 lg:flex">
         <div className="mb-8">
           <BrandBlock />
         </div>

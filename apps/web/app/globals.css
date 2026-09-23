@@ -14,14 +14,23 @@
   color-scheme: light;
 }
 
+/* Sin overflow-x:hidden a proposito. Recortaba el desborde en vez de
+   mostrarlo (asi se escondio durante meses el bug de mobile) y, sobre todo,
+   rompe el position:sticky de la barra lateral: con html o body como
+   contenedor de scroll, el aside se va con la pagina en lugar de quedarse.
+   Si algo vuelve a desbordar, que se vea. */
 html {
   min-width: 320px;
-  overflow-x: hidden;
 }
 
 body {
   min-width: 320px;
-  overflow-x: hidden;
+  /* Un correo o una URL no tienen donde cortar, y un solo dato largo alcanza
+     para empujar la pagina entera. Que corten por defecto: la alternativa era
+     el overflow-x:hidden que acabamos de sacar, que no lo arreglaba sino que
+     lo escondia. Solo actua cuando la palabra no entra, asi que no cambia
+     nada en el texto normal. */
+  overflow-wrap: break-word;
   background:
     radial-gradient(circle at top left, rgba(0, 122, 100, 0.08), transparent 30%),
     linear-gradient(180deg, #f7f1e8 0%, #f3eee6 100%);
