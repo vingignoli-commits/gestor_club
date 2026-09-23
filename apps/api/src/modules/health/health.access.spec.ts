@@ -84,6 +84,12 @@ describe('Ficha de emergencia: quién accede a qué', () => {
 
   const memberFindMany = vi.fn().mockResolvedValue([]);
 
+  const memberUpdate = vi.fn().mockResolvedValue({
+    emergencyContactName: 'Ana Perez',
+    emergencyContactRelationship: 'Hija',
+    emergencyContactPhone: '+54 9 341 555-2222',
+  });
+
   const prismaMock = {
     user: {
       findUnique: vi.fn(({ where }: { where: { id?: string; email?: string } }) =>
@@ -93,7 +99,11 @@ describe('Ficha de emergencia: quién accede a qué', () => {
       ),
       update: vi.fn().mockResolvedValue(admin),
     },
-    member: { findUnique: memberFindUnique, findMany: memberFindMany },
+    member: {
+      findUnique: memberFindUnique,
+      findMany: memberFindMany,
+      update: memberUpdate,
+    },
     memberHealth: {
       findUnique: vi.fn().mockResolvedValue(null),
       upsert: vi.fn().mockResolvedValue({ memberId: 'member-1', allergies: 'Polen' }),
@@ -208,6 +218,47 @@ describe('Ficha de emergencia: quién accede a qué', () => {
       .put('/api/v1/health/me')
       .set('Authorization', `Bearer ${tokenFor(socio)}`)
       .send({ allergies: 'Polen', diagnosticoSecreto: 'x' })
+      .expect(400);
+  });
+
+  // El contacto de emergencia lo carga el propio socio: es su dato, no una
+  // edicion del padron. Por eso pasa por 'profile:own' y no por
+  // 'members:write', que el socio comun no tiene.
+  it('el socio carga su propio contacto de emergencia sin members:write', async () => {
+    expect(socio.permissions.some((p) => p.key === 'members:write')).toBe(false);
+
+    await request(app.getHttpServer())
+      .put('/api/v1/health/me/emergency-contact')
+      .set('Authorization', `Bearer ${tokenFor(socio)}`)
+      .send({
+        emergencyContactName: 'Ana Perez',
+        emergencyContactRelationship: 'Hija',
+        emergencyContactPhone: '+54 9 341 555-2222',
+      })
+      .expect(200);
+
+    expect(memberUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'member-1' } }),
+    );
+  });
+
+  it('no puede tocar el contacto de emergencia de otro', async () => {
+    // No existe ruta para eso con 'profile:own': solo /me.
+    await request(app.getHttpServer())
+      .put('/api/v1/health/members/member-2/emergency-contact')
+      .set('Authorization', `Bearer ${tokenFor(socio)}`)
+      .send({ emergencyContactPhone: '+54 9 341 555-3333' })
+      .expect(404);
+  });
+
+  // El telefono de urgencias de la obra social es un campo de la ficha de
+  // salud; el de la familia vive en Member. Son datos distintos y no deben
+  // poder escribirse por la misma puerta.
+  it('el contacto de emergencia no se escribe por la ruta de la ficha de salud', async () => {
+    await request(app.getHttpServer())
+      .put('/api/v1/health/me')
+      .set('Authorization', `Bearer ${tokenFor(socio)}`)
+      .send({ emergencyContactPhone: '+54 9 341 555-4444' })
       .expect(400);
   });
 });

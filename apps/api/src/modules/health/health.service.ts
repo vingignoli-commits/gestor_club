@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { UpdateEmergencyContactDto } from './dto/update-emergency-contact.dto';
 import { UpsertHealthDto } from './dto/upsert-health.dto';
 
 /** Campos de texto libre: se guardan recortados, y vacío equivale a "sin dato". */
@@ -119,5 +120,70 @@ export class HealthService {
     }
 
     return saved;
+  }
+
+  /**
+   * Actualiza a quién llamar. Vive en Member y no en MemberHealth porque hay
+   * que poder avisar a la familia sin el permiso 'health:read'; pero lo edita
+   * el propio socio, así que la puerta está acá y no en 'members:write'.
+   */
+  async updateEmergencyContact(
+    memberId: string,
+    dto: UpdateEmergencyContactDto,
+    actorUserId: string,
+  ) {
+    const member = await this.prisma.member.findUnique({
+      where: { id: memberId },
+      select: {
+        emergencyContactName: true,
+        emergencyContactRelationship: true,
+        emergencyContactPhone: true,
+      },
+    });
+
+    if (!member) {
+      throw new NotFoundException('Socio no encontrado');
+    }
+
+    const clean = (value: string | undefined) =>
+      value === undefined ? undefined : value.trim() || null;
+
+    const data = {
+      emergencyContactName: clean(dto.emergencyContactName),
+      emergencyContactRelationship: clean(dto.emergencyContactRelationship),
+      emergencyContactPhone: clean(dto.emergencyContactPhone),
+    };
+
+    const updated = await this.prisma.member.update({
+      where: { id: memberId },
+      data,
+      select: {
+        emergencyContactName: true,
+        emergencyContactRelationship: true,
+        emergencyContactPhone: true,
+      },
+    });
+
+    // A diferencia de la ficha de salud, acá sí se pueden auditar los valores:
+    // un contacto de emergencia no es dato sensible de salud, y saber qué
+    // número había antes es justamente lo que sirve si alguien lo pisa.
+    const changed = Object.keys(data).filter(
+      (key) =>
+        data[key as keyof typeof data] !== undefined &&
+        member[key as keyof typeof member] !==
+          updated[key as keyof typeof updated],
+    );
+
+    if (changed.length > 0) {
+      await this.audit.log({
+        entityName: 'member_emergency_contact',
+        entityId: memberId,
+        action: 'UPDATE',
+        beforeData: { ...member, actorUserId },
+        afterData: updated,
+      });
+    }
+
+    return updated;
   }
 }

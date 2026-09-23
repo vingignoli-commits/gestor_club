@@ -11,6 +11,7 @@ import {
   RequestUser,
   RequirePermissions,
 } from '../../common/auth/auth.decorators';
+import { UpdateEmergencyContactDto } from './dto/update-emergency-contact.dto';
 import { UpsertHealthDto } from './dto/upsert-health.dto';
 import { HealthService } from './health.service';
 
@@ -38,6 +39,23 @@ export class HealthController {
   @Put('me')
   updateMine(@CurrentUser() user: RequestUser, @Body() dto: UpsertHealthDto) {
     return this.healthService.upsert(requireMemberId(user), dto, user.id);
+  }
+
+  /**
+   * A quién llamar: lo carga el propio socio. Va con 'profile:own' y no con
+   * 'members:write' porque es su dato, no una edición del padrón.
+   */
+  @RequirePermissions('profile:own')
+  @Put('me/emergency-contact')
+  updateMyEmergencyContact(
+    @CurrentUser() user: RequestUser,
+    @Body() dto: UpdateEmergencyContactDto,
+  ) {
+    return this.healthService.updateEmergencyContact(
+      requireMemberId(user),
+      dto,
+      user.id,
+    );
   }
 
   @RequirePermissions('health:read')

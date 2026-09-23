@@ -232,18 +232,46 @@ export default function ContactosPage() {
               </div>
 
               {c.emergencyContactPhone || c.emergencyContactName ? (
-                <div className="mt-4 rounded-2xl bg-amber-50 px-4 py-3">
+                <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
                   <div className="text-xs font-semibold uppercase tracking-wide text-amber-800">
-                    En caso de emergencia
+                    A quién llamar en una emergencia
                   </div>
-                  <div className="mt-1 text-sm text-ink">
-                    {c.emergencyContactName ?? "Sin nombre"}
-                    {c.emergencyContactRelationship
-                      ? ` · ${c.emergencyContactRelationship}`
-                      : ""}
-                  </div>
-                  <div className="mt-1 text-sm">
-                    <PhoneLinks label="Teléfono" phone={c.emergencyContactPhone} />
+                  <div className="mt-2 grid gap-1 text-sm">
+                    <div className="flex flex-wrap items-baseline gap-x-2">
+                      <span className="text-xs uppercase tracking-wide text-ink/40">
+                        Nombre
+                      </span>
+                      <span className="font-semibold text-ink">
+                        {c.emergencyContactName ?? (
+                          <span className="text-rose-700">Falta el nombre</span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-baseline gap-x-2">
+                      <span className="text-xs uppercase tracking-wide text-ink/40">
+                        Parentesco
+                      </span>
+                      <span className="font-semibold text-ink">
+                        {c.emergencyContactRelationship ?? (
+                          <span className="text-rose-700">Falta el vínculo</span>
+                        )}
+                      </span>
+                    </div>
+                    {c.emergencyContactPhone ? (
+                      <PhoneLinks
+                        label="Teléfono"
+                        phone={c.emergencyContactPhone}
+                      />
+                    ) : (
+                      <div className="flex flex-wrap items-baseline gap-x-2">
+                        <span className="text-xs uppercase tracking-wide text-ink/40">
+                          Teléfono
+                        </span>
+                        <span className="font-semibold text-rose-700">
+                          Falta el teléfono
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : null}

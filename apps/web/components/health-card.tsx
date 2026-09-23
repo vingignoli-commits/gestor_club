@@ -118,18 +118,264 @@ const TEXTAREAS: Array<{ key: keyof Draft; label: string; hint?: string }> = [
 const TEXT_INPUTS: Array<{ key: keyof Draft; label: string }> = [
   { key: "insuranceProvider", label: "Obra social o prepaga" },
   { key: "insuranceMemberId", label: "Nº de afiliado" },
-  { key: "insuranceEmergencyPhone", label: "Teléfono de urgencias" },
+  {
+    key: "insuranceEmergencyPhone",
+    label: "Urgencias de la cobertura (ambulancia)",
+  },
   { key: "primaryDoctorName", label: "Médico de cabecera" },
   { key: "primaryDoctorPhone", label: "Teléfono del médico" },
 ];
 
-function Dato({ label, value }: { label: string; value: string | null }) {
+/** "alerta" es para lo que hay que leer sí o sí antes de actuar. */
+type Tono = "neutral" | "alerta";
+
+const TONOS: Record<Tono, { caja: string; rotulo: string; texto: string }> = {
+  neutral: {
+    caja: "bg-ink/5",
+    rotulo: "text-ink/50",
+    texto: "text-ink",
+  },
+  alerta: {
+    caja: "border-2 border-amber-400 bg-amber-50",
+    rotulo: "text-amber-900",
+    texto: "text-ink font-medium",
+  },
+};
+
+function Dato({
+  label,
+  value,
+  tono = "neutral",
+}: {
+  label: string;
+  value: string | null;
+  tono?: Tono;
+}) {
+  const hayDato = Boolean(value?.trim());
+
+  // Un campo vacío nunca alerta: si todo llama la atención, nada la llama. La
+  // alerta marca que hay algo cargado que leer, no que el campo exista.
+  const efectivo: Tono = tono === "alerta" && !hayDato ? "neutral" : tono;
+  const estilo = TONOS[efectivo];
+
   return (
-    <div className="rounded-2xl bg-ink/5 px-4 py-3">
-      <div className="text-xs uppercase tracking-wide text-ink/50">{label}</div>
-      <div className="mt-1 whitespace-pre-wrap text-sm text-ink">
-        {value?.trim() ? value : <span className="text-ink/40">Sin datos</span>}
+    <div className={`rounded-2xl px-4 py-3 ${estilo.caja}`}>
+      <div
+        className={`flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide ${estilo.rotulo}`}
+      >
+        {/* El simbolo acompaña al color: quien no distingue el ámbar del gris
+            igual ve que esa tarjeta pide atención. */}
+        {efectivo === "alerta" ? <span aria-hidden="true">⚠</span> : null}
+        {label}
       </div>
+      <div className={`mt-1 whitespace-pre-wrap text-sm ${estilo.texto}`}>
+        {hayDato ? value : <span className="text-ink/40">Sin datos</span>}
+      </div>
+    </div>
+  );
+}
+
+type EmergencyContact = {
+  emergencyContactName: string | null;
+  emergencyContactRelationship: string | null;
+  emergencyContactPhone: string | null;
+};
+
+/**
+ * A quién llamar si algo le pasa al socio.
+ *
+ * Es un dato distinto del teléfono de urgencias de la cobertura: este es el de
+ * una persona concreta, lo carga el propio socio, y por eso el nombre y el
+ * parentesco se muestran siempre junto al número. Un teléfono solo no le dice
+ * a quien está marcando con quién va a hablar.
+ */
+function EmergencyContactBlock({
+  contact,
+  editable,
+  onSaved,
+}: {
+  contact: EmergencyContact;
+  /** Solo el propio socio lo edita desde acá; un admin lo hace en Cuadro. */
+  editable: boolean;
+  onSaved: (fresh: EmergencyContact) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [draft, setDraft] = useState({
+    emergencyContactName: contact.emergencyContactName ?? "",
+    emergencyContactRelationship: contact.emergencyContactRelationship ?? "",
+    emergencyContactPhone: contact.emergencyContactPhone ?? "",
+  });
+
+  const { emergencyContactName: nombre, emergencyContactRelationship: vinculo } =
+    contact;
+  const telefono = contact.emergencyContactPhone;
+  const vacio = !nombre && !telefono;
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+
+    try {
+      const fresh = await api.put<EmergencyContact>(
+        "/health/me/emergency-contact",
+        draft,
+      );
+      onSaved(fresh);
+      setEditing(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo guardar.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+      <div className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+        A quién llamar en una emergencia
+      </div>
+
+      {editing ? (
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ink/70">
+              Nombre y apellido
+            </label>
+            <input
+              value={draft.emergencyContactName}
+              onChange={(e) =>
+                setDraft((p) => ({ ...p, emergencyContactName: e.target.value }))
+              }
+              className="min-h-11 w-full rounded-2xl border border-ink/10 bg-white px-4 text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ink/70">
+              Parentesco o vínculo
+            </label>
+            <input
+              value={draft.emergencyContactRelationship}
+              onChange={(e) =>
+                setDraft((p) => ({
+                  ...p,
+                  emergencyContactRelationship: e.target.value,
+                }))
+              }
+              placeholder="Cónyuge, hijo/a, hermano/a..."
+              className="min-h-11 w-full rounded-2xl border border-ink/10 bg-white px-4 text-sm"
+            />
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-xs font-medium text-ink/70">
+              Teléfono
+            </label>
+            <input
+              value={draft.emergencyContactPhone}
+              onChange={(e) =>
+                setDraft((p) => ({ ...p, emergencyContactPhone: e.target.value }))
+              }
+              className="min-h-11 w-full rounded-2xl border border-ink/10 bg-white px-4 text-sm"
+            />
+          </div>
+
+          {error ? (
+            <div className="text-sm text-rose-700 sm:col-span-2">{error}</div>
+          ) : null}
+
+          <div className="flex flex-wrap gap-2 sm:col-span-2">
+            <button
+              type="button"
+              onClick={save}
+              disabled={saving}
+              className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-accent px-5 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {saving ? "Guardando..." : "Guardar contacto"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDraft({
+                  emergencyContactName: contact.emergencyContactName ?? "",
+                  emergencyContactRelationship:
+                    contact.emergencyContactRelationship ?? "",
+                  emergencyContactPhone: contact.emergencyContactPhone ?? "",
+                });
+                setEditing(false);
+                setError(null);
+              }}
+              className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-ink/10 bg-white px-5 text-sm font-semibold text-ink/70"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {vacio ? (
+            <div className="mt-2 text-sm text-ink/60">
+              {editable
+                ? "Todavía no cargaste a quién llamar. Es el dato que más falta hace cuando pasa algo."
+                : "Sin cargar. Lo carga el propio socio desde Mi Perfil."}
+            </div>
+          ) : (
+            <div className="mt-2 grid gap-2 sm:grid-cols-3">
+              <div>
+                <div className="text-xs uppercase tracking-wide text-ink/50">
+                  Nombre
+                </div>
+                <div className="text-sm font-semibold text-ink">
+                  {nombre ?? (
+                    <span className="text-rose-700">Falta el nombre</span>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-xs uppercase tracking-wide text-ink/50">
+                  Parentesco
+                </div>
+                <div className="text-sm font-semibold text-ink">
+                  {vinculo ?? (
+                    <span className="text-rose-700">Falta el vínculo</span>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-xs uppercase tracking-wide text-ink/50">
+                  Teléfono
+                </div>
+                {telefono ? (
+                  <a
+                    href={`tel:${telefono.replace(/\D/g, "")}`}
+                    className="text-sm font-semibold text-ink underline underline-offset-4"
+                  >
+                    {telefono}
+                  </a>
+                ) : (
+                  <div className="text-sm font-semibold text-rose-700">
+                    Falta el teléfono
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {editable ? (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="mt-3 inline-flex min-h-11 items-center justify-center rounded-2xl border border-amber-300 bg-white px-5 text-sm font-semibold text-amber-900"
+            >
+              {vacio ? "Cargar contacto" : "Editar contacto"}
+            </button>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }
@@ -216,33 +462,13 @@ export function HealthCard({
       ) : null}
 
       {member ? (
-        <div className="rounded-2xl bg-amber-50 px-4 py-3">
-          <div className="text-xs font-semibold uppercase tracking-wide text-amber-800">
-            Contacto de emergencia
-          </div>
-          {member.emergencyContactPhone || member.emergencyContactName ? (
-            <>
-              <div className="mt-1 text-sm font-semibold text-ink">
-                {member.emergencyContactName ?? "Sin nombre"}
-                {member.emergencyContactRelationship
-                  ? ` · ${member.emergencyContactRelationship}`
-                  : ""}
-              </div>
-              {member.emergencyContactPhone ? (
-                <a
-                  href={`tel:${member.emergencyContactPhone.replace(/\D/g, "")}`}
-                  className="text-sm font-semibold text-ink underline underline-offset-4"
-                >
-                  {member.emergencyContactPhone}
-                </a>
-              ) : null}
-            </>
-          ) : (
-            <div className="mt-1 text-sm text-ink/50">
-              Sin cargar. Se edita junto con los datos de contacto del socio.
-            </div>
-          )}
-        </div>
+        <EmergencyContactBlock
+          contact={member}
+          editable={ownRecord}
+          onSaved={(fresh) =>
+            setData((prev) => (prev ? { ...prev, member: { ...prev.member, ...fresh } } : prev))
+          }
+        />
       ) : null}
 
       {editing ? (
@@ -357,20 +583,31 @@ export function HealthCard({
                 health ? BLOOD_TYPE_LABELS[health.bloodType] ?? "Sin datos" : null
               }
             />
+            {/* Sin formato especial en ninguno de los dos estados: la alerta
+                queda reservada para lo que hay que leer antes de actuar. */}
             <Dato
               label="Donación de órganos"
               value={
                 health
                   ? health.organDonationOpposition
-                    ? "Manifestó oposición"
-                    : "Sin oposición registrada"
+                    ? "Manifestó oposición a donar"
+                    : "Donante · sin oposición registrada"
                   : null
               }
             />
-            <Dato label="Alergias" value={health?.allergies ?? null} />
-            <Dato label="Medicación habitual" value={health?.medications ?? null} />
+            <Dato
+              label="Alergias"
+              tono="alerta"
+              value={health?.allergies ?? null}
+            />
+            <Dato
+              label="Medicación habitual"
+              tono="alerta"
+              value={health?.medications ?? null}
+            />
             <Dato
               label="Condiciones crónicas"
+              tono="alerta"
               value={health?.chronicConditions ?? null}
             />
             <Dato
@@ -382,12 +619,18 @@ export function HealthCard({
                       health.insuranceMemberId
                         ? `Afiliado ${health.insuranceMemberId}`
                         : null,
-                      health.insuranceEmergencyPhone,
                     ]
                       .filter(Boolean)
                       .join(" · ")
                   : null
               }
+            />
+            {/* Separado de la cobertura a proposito: es el numero al que se
+                pide la ambulancia, no el de la familia. Mezclados, un numero
+                suelto al lado de la obra social se confunde con el otro. */}
+            <Dato
+              label="Urgencias de la cobertura (ambulancia)"
+              value={health?.insuranceEmergencyPhone ?? null}
             />
             <Dato
               label="Médico de cabecera"
@@ -401,14 +644,17 @@ export function HealthCard({
             />
             <Dato
               label="Dispositivos implantados"
+              tono="alerta"
               value={health?.implantedDevices ?? null}
             />
             <Dato
               label="Cirugías relevantes"
+              tono="alerta"
               value={health?.relevantSurgeries ?? null}
             />
             <Dato
               label="Directivas anticipadas"
+              tono="alerta"
               value={health?.advanceDirectives ?? null}
             />
           </div>
